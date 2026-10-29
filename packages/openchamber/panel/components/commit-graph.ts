@@ -5,14 +5,18 @@
 
 import { CommitInfo } from '../state';
 
-/** 分支颜色 */
+/**
+ * Lane colours.
+ * Theme tokens rather than literals: SVG presentation attributes cannot take
+ * `var()`, so the emitters below use a `style` attribute instead.
+ */
 const BRANCH_COLORS = [
-  '#589df6', // 蓝色
-  '#4caf50', // 绿色
-  '#ff9800', // 橙色
-  '#f44336', // 红色
-  '#9c27b0', // 紫色
-  '#00bcd4', // 青色
+  'var(--oc-primary)',
+  'var(--oc-muted)',
+  'var(--oc-info)',
+  'var(--oc-warning)',
+  'var(--oc-success)',
+  'var(--oc-info)',
 ];
 
 /** 图线列信息 */
@@ -113,10 +117,10 @@ export function generateRowGraphSVG(
       // 找到下一行中对应的列
       const nextCol = nextRowColumns.find(c => c.column === col.column);
       if (nextCol) {
-        svg += `<line x1="${x}" y1="0" x2="${x}" y2="${HEIGHT}" stroke="${col.color}" stroke-width="2"/>`;
+        svg += `<line x1="${x}" y1="0" x2="${x}" y2="${HEIGHT}" style="stroke: ${col.color}" stroke-width="2"/>`;
       } else {
         // 列在下一行结束
-        svg += `<line x1="${x}" y1="0" x2="${x}" y2="${HEIGHT / 2}" stroke="${col.color}" stroke-width="2"/>`;
+        svg += `<line x1="${x}" y1="0" x2="${x}" y2="${HEIGHT / 2}" style="stroke: ${col.color}" stroke-width="2"/>`;
       }
     }
 
@@ -124,7 +128,7 @@ export function generateRowGraphSVG(
     for (const col of nextRowColumns) {
       if (!rowColumns.find(c => c.column === col.column)) {
         const x = PADDING + col.column * COL_WIDTH;
-        svg += `<line x1="${x}" y1="${HEIGHT / 2}" x2="${x}" y2="${HEIGHT}" stroke="${col.color}" stroke-width="2"/>`;
+        svg += `<line x1="${x}" y1="${HEIGHT / 2}" x2="${x}" y2="${HEIGHT}" style="stroke: ${col.color}" stroke-width="2"/>`;
       }
     }
 
@@ -136,19 +140,19 @@ export function generateRowGraphSVG(
       if (parent1Col && parent2Col) {
         const x1 = PADDING + parent1Col.column * COL_WIDTH;
         const x2 = PADDING + parent2Col.column * COL_WIDTH;
-        svg += `<line x1="${x1}" y1="${HEIGHT / 2}" x2="${x2}" y2="${HEIGHT / 2}" stroke="${nodeColor}" stroke-width="2"/>`;
+        svg += `<line x1="${x1}" y1="${HEIGHT / 2}" x2="${x2}" y2="${HEIGHT / 2}" style="stroke: ${nodeColor}" stroke-width="2"/>`;
       }
     }
   } else {
     // 最后一行，只绘制到中间的垂直线
     for (const col of rowColumns) {
       const x = PADDING + col.column * COL_WIDTH;
-      svg += `<line x1="${x}" y1="0" x2="${x}" y2="${HEIGHT / 2}" stroke="${col.color}" stroke-width="2"/>`;
+      svg += `<line x1="${x}" y1="0" x2="${x}" y2="${HEIGHT / 2}" style="stroke: ${col.color}" stroke-width="2"/>`;
     }
   }
 
   // 绘制节点
-  svg += `<circle cx="${nodeX}" cy="${HEIGHT / 2}" r="4" fill="${nodeColor}"/>`;
+  svg += `<circle cx="${nodeX}" cy="${HEIGHT / 2}" r="4" style="fill: ${nodeColor}"/>`;
 
   svg += '</svg>';
   return svg;

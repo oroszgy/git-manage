@@ -79,30 +79,20 @@ export function showSettingsMenu(e: MouseEvent): void {
 
   const menu = document.createElement('div');
   menu.id = 'git-settings-menu';
-  menu.style.position = 'fixed';
+  menu.className = 'gm-popup';
+  // The menu opens at the pointer: coordinates are runtime values.
   menu.style.left = `${e.clientX}px`;
   menu.style.top = `${e.clientY}px`;
-  menu.style.background = '#2d2d2d';
-  menu.style.border = '1px solid #444';
-  menu.style.borderRadius = '4px';
-  menu.style.padding = '4px 0';
-  menu.style.zIndex = '1000';
-  menu.style.minWidth = '160px';
-  menu.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.5)';
 
-  // 标题
+  // Title
   const title = document.createElement('div');
   title.textContent = t('settings.title');
-  title.style.padding = '6px 12px';
-  title.style.fontSize = '11px';
-  title.style.color = '#888';
+  title.className = 'gm-popup__group';
   menu.appendChild(title);
 
-  // 标题与选项之间的分隔线
+  // Separator between the title and the toggles
   const separator = document.createElement('div');
-  separator.style.height = '1px';
-  separator.style.background = '#444';
-  separator.style.margin = '4px 0';
+  separator.className = 'gm-popup__sep';
   menu.appendChild(separator);
 
   // 平铺渲染：与 IDEA 一致，仅在「列开关」与「显示项」之间加一条分隔线
@@ -110,27 +100,16 @@ export function showSettingsMenu(e: MouseEvent): void {
     // 前三项为表头列开关，之后为表格/图显示项，中间插分隔线
     if (index === 3) {
       const midSep = document.createElement('div');
-      midSep.style.height = '1px';
-      midSep.style.background = '#444';
-      midSep.style.margin = '4px 0';
+      midSep.className = 'gm-popup__sep';
       menu.appendChild(midSep);
     }
     {
       const el = document.createElement('div');
       el.dataset.key = item.key;
-      el.style.padding = '6px 12px';
-      el.style.cursor = 'pointer';
-      el.style.fontSize = '12px';
-      el.style.color = '#ccc';
-      el.style.display = 'flex';
-      el.style.alignItems = 'center';
-      el.style.gap = '6px';
+      el.className = 'gm-menu-item';
 
       const check = document.createElement('span');
-      check.className = 'git-settings-check';
-      check.style.width = '12px';
-      check.style.flex = '0 0 12px';
-      check.style.color = '#4caf50';
+      check.className = 'git-settings-check gm-menu-item__check';
 
       const label = document.createElement('span');
       label.textContent = t(item.labelKey);
@@ -144,20 +123,7 @@ export function showSettingsMenu(e: MouseEvent): void {
   syncChecks(menu);
   document.body.appendChild(menu);
 
-  // 悬停高亮（仅开关项，标题与分隔线不响应）
-  menu.addEventListener('mouseenter', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu && target.dataset.key) {
-      target.style.background = '#3a3a3a';
-    }
-  }, true);
-
-  menu.addEventListener('mouseleave', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu && target.dataset.key) {
-      target.style.background = 'transparent';
-    }
-  }, true);
+  // Hover comes from .gm-menu-item in the stylesheet.
 
   // 点击开关项：切换状态并刷新勾号，菜单保持打开
   menu.addEventListener('click', (ev) => {

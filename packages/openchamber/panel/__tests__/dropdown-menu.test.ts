@@ -130,7 +130,8 @@ describe('dropdown-menu', () => {
       showDropdownMenu(anchor, createItems(), vi.fn());
 
       const menu = getMenu();
-      expect(menu.style.position).toBe('fixed');
+      expect(menu.classList.contains('gm-popup')).toBe(true);
+      // Coordinates are the only runtime values left inline.
       expect(menu.style.left).toBe('100px');
       expect(menu.style.top).toBe('76px');
       expect(Array.from(menu.children).map(el => el.textContent)).toEqual([
@@ -142,79 +143,54 @@ describe('dropdown-menu', () => {
       ]);
     });
 
-    it('菜单容器应应用深色主题背景、边框、圆角、小字号与层级样式', () => {
+    it('菜单容器与行只用样式表类，不再携带内联外观', () => {
       const anchor = createAnchor('anchor-style');
       showDropdownMenu(anchor, createItems(), vi.fn());
 
       const menu = getMenu();
-      expect(menu.style.background).toBe('rgb(45, 45, 45)');
-      expect(menu.style.border).toBe('1px solid rgb(68, 68, 68)');
-      expect(menu.style.borderRadius).toBe('4px');
-      expect(menu.style.padding).toBe('4px 0px');
-      expect(menu.style.zIndex).toBe('1000');
-      expect(menu.style.minWidth).toBe('160px');
-      expect(menu.style.boxShadow).toBe('0 2px 8px rgba(0, 0, 0, 0.5)');
+      expect(menu.className).toContain('gm-popup');
+      // Everything except the computed position lives in styles.css.
+      const inline = menu.getAttribute('style') ?? '';
+      expect(inline).toContain('left:');
+      expect(inline).toContain('top:');
+      expect(inline).not.toContain('background');
 
       const row = getRow(menu, 'main');
-      expect(row.style.fontSize).toBe('12px');
-      expect(row.style.color).toBe('rgb(204, 204, 204)');
-      expect(row.style.display).toBe('flex');
+      expect(row.classList.contains('gm-menu-item')).toBe(true);
+      expect(row.getAttribute('style')).toBeNull();
     });
 
-    it('菜单应限制最大高度并内部滚动（长分支列表防溢出视口）', () => {
-      const anchor = createAnchor('anchor-maxheight');
-      showDropdownMenu(anchor, createItems(), vi.fn());
-
-      const menu = getMenu();
-      expect(menu.style.maxHeight).toBe('60vh');
-      expect(menu.style.overflowY).toBe('auto');
-    });
-
-    it('分组标题应渲染为弱化样式，分隔线应渲染为横线', () => {
+    it('分组标题与分隔线由各自的类承担外观', () => {
       const anchor = createAnchor('anchor-kinds');
       showDropdownMenu(anchor, createItems(), vi.fn());
 
       const menu = getMenu();
       const group = getRow(menu, 'group-main');
       expect(group.dataset.kind).toBe('group');
-      expect(group.style.fontSize).toBe('11px');
-      expect(group.style.color).toBe('rgb(136, 136, 136)');
-      expect(group.style.cursor).toBe('default');
+      expect(group.classList.contains('gm-popup__group')).toBe(true);
+      expect(group.getAttribute('style')).toBeNull();
 
       const sep = getRow(menu, 'sep-1');
       expect(sep.dataset.kind).toBe('separator');
-      expect(sep.style.height).toBe('1px');
-      expect(sep.style.background).toBe('rgb(68, 68, 68)');
-      expect(sep.style.margin).toBe('4px 0px');
+      expect(sep.classList.contains('gm-popup__sep')).toBe(true);
+      expect(sep.textContent).toBe('');
     });
 
-    it('可选项与分组标题应应用完整的行内样式（内边距、对齐、勾号槽）', () => {
+    it('可选项渲染勾号槽，且未禁用项不受禁用状态影响', () => {
       const anchor = createAnchor('anchor-row-styles');
       showDropdownMenu(anchor, createItems(), vi.fn());
 
       const menu = getMenu();
-
-      // 分组标题内边距
-      const group = getRow(menu, 'group-main');
-      expect(group.style.padding).toBe('6px 12px');
-
-      // 可选项：内边距、flex 布局、垂直居中、勾号与文案间距、非禁用配色
       const item = getRow(menu, 'main');
-      expect(item.style.padding).toBe('6px 12px');
-      expect(item.style.display).toBe('flex');
-      expect(item.style.alignItems).toBe('center');
-      expect(item.style.gap).toBe('6px');
-      expect(item.style.color).toBe('rgb(204, 204, 204)');
+      expect(item.dataset.disabled).toBe('false');
 
-      // 勾号槽：固定宽度、不伸缩、选中色
       const check = item.querySelector<HTMLElement>('.git-dropdown-check');
       expect(check).toBeTruthy();
-      expect(check!.style.width).toBe('12px');
-      expect(check!.style.flex).toBe('0 0 12px');
-      expect(check!.style.color).toBe('rgb(76, 175, 80)');
+      expect(check!.classList.contains('gm-menu-item__check')).toBe(true);
+      expect(check!.getAttribute('style')).toBeNull();
     });
 
-    it('未禁用可选项光标应为 pointer 手型，禁用项保持 default', () => {
+    it('禁用状态由 data-disabled 表达，样式不再内联', () => {
       const anchor = createAnchor('anchor-cursor');
       showDropdownMenu(
         anchor,
@@ -226,8 +202,9 @@ describe('dropdown-menu', () => {
       );
 
       const menu = getMenu();
-      expect(getRow(menu, 'ok').style.cursor).toBe('pointer');
-      expect(getRow(menu, 'off').style.cursor).toBe('default');
+      expect(getRow(menu, 'ok').dataset.disabled).toBe('false');
+      expect(getRow(menu, 'off').dataset.disabled).toBe('true');
+      expect(getRow(menu, 'off').getAttribute('style')).toBeNull();
     });
   });
 
@@ -277,8 +254,6 @@ describe('dropdown-menu', () => {
       expect(document.getElementById(MENU_ID)).toBeTruthy();
       const row = getRow(getMenu(), 'locked');
       expect(row.dataset.disabled).toBe('true');
-      expect(row.style.color).toBe('rgb(102, 102, 102)');
-      expect(row.style.cursor).toBe('default');
     });
 
     it('checked 条目应渲染 ✓ 标记，未选中条目无标记', () => {
@@ -542,7 +517,7 @@ describe('dropdown-menu', () => {
       expect(getMenu().style.top).toBe('741px');
     });
 
-    it('可选项悬停应高亮，分组标题与禁用项不响应悬停', () => {
+    it('悬停不再由脚本改写内联背景（样式表 :hover 负责高亮）', () => {
       const anchor = createAnchor('anchor-hover');
       showDropdownMenu(
         anchor,
@@ -555,19 +530,12 @@ describe('dropdown-menu', () => {
       );
       const menu = getMenu();
 
-      const ok = getRow(menu, 'ok');
-      ok.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(ok.style.background).toBe('rgb(58, 58, 58)');
-      ok.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-      expect(ok.style.background).toBe('transparent');
-
-      const group = getRow(menu, 'g');
-      group.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(group.style.background).toBe('');
-
-      const off = getRow(menu, 'off');
-      off.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(off.style.background).toBe('');
+      for (const id of ['ok', 'g', 'off']) {
+        const row = getRow(menu, id);
+        row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+        row.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
+        expect(row.getAttribute('style')).toBeNull();
+      }
     });
 
     it('行内嵌套的可选项不应响应点击与悬停（仅菜单直属行生效）', () => {
@@ -590,13 +558,12 @@ describe('dropdown-menu', () => {
       expect(onSelect).not.toHaveBeenCalled();
       expect(document.getElementById(MENU_ID)).toBeTruthy();
 
-      // 悬停进入：不应高亮
+      // Nested rows never carry their own inline styling either.
       nested.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(nested.style.background).toBe('');
+      expect(nested.getAttribute('style')).toBeNull();
 
-      // 悬停离开：不应重置背景
       nested.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-      expect(nested.style.background).toBe('');
+      expect(nested.getAttribute('style')).toBeNull();
     });
 
     it('打开与选择应输出 [dropdown] 前缀的 JSON 调试日志', () => {
@@ -723,7 +690,7 @@ describe('dropdown-menu', () => {
       expect(getMenu().style.top).toBe('148px');
     });
 
-    it('悬停高亮不作用于菜单本体与分组/禁用行（进入与离开均不改背景）', () => {
+    it('鼠标事件不再改写任何内联背景（外观完全由样式表承担）', () => {
       const anchor = createAnchor('anchor-hover-edge');
       showDropdownMenu(
         anchor,
@@ -735,34 +702,17 @@ describe('dropdown-menu', () => {
         vi.fn(),
       );
       const menu = getMenu();
-      const initialBg = menu.style.background;
 
-      // 菜单本体：enter/leave 均不改背景
       menu.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(menu.style.background).toBe(initialBg);
       menu.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-      expect(menu.style.background).toBe(initialBg);
+      expect(menu.style.background).toBe('');
 
-      // 分组标题：leave 不应设置/重置背景
-      const group = getRow(menu, 'g');
-      group.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(group.style.background).toBe('');
-      group.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-      expect(group.style.background).toBe('');
-
-      // 禁用项同理：leave 不响应
-      const off = getRow(menu, 'off');
-      off.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(off.style.background).toBe('');
-      off.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-      expect(off.style.background).toBe('');
-
-      // 可选项 leave 应重置为透明（正向对照）
-      const ok = getRow(menu, 'ok');
-      ok.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      expect(ok.style.background).toBe('rgb(58, 58, 58)');
-      ok.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-      expect(ok.style.background).toBe('transparent');
+      for (const id of ['g', 'off', 'ok']) {
+        const row = getRow(menu, id);
+        row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+        row.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
+        expect(row.getAttribute('style')).toBeNull();
+      }
     });
   });
 

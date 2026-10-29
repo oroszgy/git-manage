@@ -19,9 +19,11 @@ import { mountEmpty } from "@openchamber/sdk/ui";
 
 import { html } from './html';
 import { host } from './host';
+import { installHostTheme } from './theme';
 import { getState, setState } from './state';
 import { setLocale, t } from './i18n';
 import { createServiceClient } from './service';
+import type { BranchActions } from './components/branch-panel';
 import { deleteBranches, resolveDeleteTargets } from './components/batch-delete';
 import { showOperationError } from './components/errors';
 import {
@@ -31,12 +33,10 @@ import {
   createCommitDetailPanel,
   createConsolePanel,
   createWorktreesPanel,
-  createSidebar,
   hideContextMenu,
   showCompareBranchesView,
 } from './components';
 import { showCreateBranchDialog } from './components/dialogs';
-import { showSettingsMenu } from './components/settings-menu';
 import { filterCommits } from './components/commit-list';
 
 const root = document.querySelector("#root")!;
@@ -102,13 +102,13 @@ async function render(): Promise<void> {
 
     // 主布局: 上下结构 (内容 + 底部Tab栏)
     const mainLayout = html`
-      <div style="display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden;"></div>
+      <div class="gm-shell"></div>
     `;
 
     // 顶部细进度条：Fetch 等耗时操作期间显示流动动画，空闲时高度为 0 不占位
     const progressBar = html`
-      <div data-progress style="height: 0; flex-shrink: 0; overflow: hidden; background: #2b2b2b; position: relative; transition: height 0.15s;">
-        <div data-progress-inner style="position: absolute; top: 0; left: 0; height: 2px; width: 30%; background: #589df6; opacity: 0;"></div>
+      <div data-progress class="gm-progress">
+        <div data-progress-inner class="gm-progress__bar"></div>
       </div>
     `;
     mainLayout.appendChild(progressBar);
@@ -118,65 +118,58 @@ async function render(): Promise<void> {
 
     // 内容区域: 左中右三栏
     const contentArea = html`
-      <div style="display: flex; flex: 1; width: 100%; overflow: hidden;"></div>
+      <div class="gm-content"></div>
     `;
     mainLayout.appendChild(contentArea);
 
-    // 左侧图标工具栏 (IntelliJ 风格)：先占位保证三栏顺序，handlers 待依赖面板就绪后接线
-    const sidebarHost = html`
-      <div></div>
-    `;
-    contentArea.appendChild(sidebarHost);
-
-    // A 区域: 分支面板 (左侧 220px)
+    // A region: branch panel (left). Its header owns the branch actions that
+    // used to live in the icon rail, so the rail is gone (issue #23).
     const branchPanel = html`
-      <div style="width: 220px; min-width: 220px; border-right: 1px solid #333; display: flex; flex-direction: column; overflow: hidden; background: #1e1e1e;"></div>
+      <div class="gm-branches"></div>
     `;
-    // 会话级保留上次的显隐状态
-    branchPanel.style.display = getState().branchPanelHidden ? 'none' : '';
+    // Session-level visibility, kept across rebuilds.
+    branchPanel.hidden = getState().branchPanelHidden;
     contentArea.appendChild(branchPanel);
 
-    const branchPanelComp = createBranchPanel(
-      branchPanel,
-      service,
-      getDir(),
-      (branch) => {
-        console.debug(JSON.stringify({ prefix: '[main]', event: 'on_branch_select_cb', branchName: branch.name }));
-        loadCommitsForBranch(branch.name);
-      },
-      // 点击分支面板空白区域：取消选中并清除分支过滤，恢复全部提交
-      () => { clearBranchFilter(); }
-    );
-    disposables.push(branchPanelComp);
+    const toggleBranchPanel = (): void => {
+      setState(s => { s.branchPanelHidden = !s.branchPanelHidden; });
+      branchPanel.hidden = getState().branchPanelHidden;
+    };
 
-    // B 区域: 提交列表 (中间 - 占大部分空间)
+    // B region: commit list (middle, takes the remaining width)
     const commitListPanel = html`
-      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #333;"></div>
+      <div class="gm-main"></div>
     `;
     contentArea.appendChild(commitListPanel);
 
-    const commitListComp = createCommitListPanel(commitListPanel, service, getDir(), (commit) => {
-      loadCommitDetail(commit.hash);
-    });
+    const commitListComp = createCommitListPanel(
+      commitListPanel,
+      service,
+      getDir(),
+      (commit) => {
+        loadCommitDetail(commit.hash);
+      },
+      {
+        onToggleBranchPanel: toggleBranchPanel,
+        onLocateBranch: () => { void runSidebarLocateBranch(); },
+      },
+    );
     disposables.push(commitListComp);
 
-    // 左侧图标工具栏：12 个图标全部接线（依赖分支面板、提交列表、分支面板组件）
-    const sidebarComp = createSidebar(sidebarHost, {
-      onToggleBranchPanel: () => {
-        setState(s => { s.branchPanelHidden = !s.branchPanelHidden; });
-        branchPanel.style.display = getState().branchPanelHidden ? 'none' : '';
-      },
+    /** Branch actions rendered in the branch-panel header. */
+    const branchActions: BranchActions = {
       onNewBranch: () => {
         try {
-          // 选中提交时基于该提交建分支（IDEA 语义），否则基于当前 HEAD
+          // A selected commit means "branch from here" (IDEA semantics), otherwise HEAD.
           const selected = getState().selectedCommit?.hash ?? null;
           void service.debugLog('new-branch-dialog-open', { selectedCommit: selected });
-          showCreateBranchDialog({ service, directory: getDir(), startPoint: selected ?? undefined, entry: 'sidebar' });
+          showCreateBranchDialog({ service, directory: getDir(), startPoint: selected ?? undefined, entry: 'branchPanel' });
         } catch (e) {
-          console.error(JSON.stringify({ prefix: '[sidebar]', event: 'new_branch_error', error: String(e) }));
+          console.error(JSON.stringify({ prefix: '[branch-panel]', event: 'new_branch_error', error: String(e) }));
         }
       },
-      onRefresh: () => { void runSidebarUpdate(); },
+      onUpdateSelected: () => { void runSidebarUpdate(); },
+      onFetch: () => { void runSidebarFetch(); },
       onDeleteBranch: () => {
         // 对齐 IDEA DeleteBranchAction：多选时批量删除所有选中分支，未多选时只删单选分支。
         // IDEA 在多选包含当前分支时整体置灰，这里改为明确提示并中止，避免删掉一半才失败
@@ -287,24 +280,32 @@ async function render(): Promise<void> {
         })();
       },
       onToggleMyBranches: () => { void toggleMyBranches(); },
-      onFetch: () => { void runSidebarFetch(); },
       onFavorite: () => { void runSidebarFavorite(); },
-      onLocateBranch: () => { void runSidebarLocateBranch(); },
-      onSettings: (e) => { showSettingsMenu(e); },
-      onExpandAll: () => { branchPanelComp.expandAll(); },
-      onCollapseAll: () => { branchPanelComp.collapseAll(); },
-    });
-    disposables.push(sidebarComp);
+    };
+
+    const branchPanelComp = createBranchPanel(
+      branchPanel,
+      service,
+      getDir(),
+      (branch) => {
+        console.debug(JSON.stringify({ prefix: '[main]', event: 'on_branch_select_cb', branchName: branch.name }));
+        loadCommitsForBranch(branch.name);
+      },
+      // Empty space: clear the selection and the branch filter, restore all commits.
+      () => { clearBranchFilter(); },
+      branchActions,
+    );
+    disposables.push(branchPanelComp);
 
     // C 区域: 右侧详情面板 (固定宽度 300px)
     const detailPanel = html`
-      <div style="width: 300px; min-width: 200px; display: flex; flex-direction: column; overflow: hidden;"></div>
+      <div class="gm-side"></div>
     `;
     contentArea.appendChild(detailPanel);
 
     // C1: 变更文件 (上半部分)
     const fileDiffPanel = html`
-      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; border-bottom: 1px solid #333;"></div>
+      <div class="gm-pane gm-pane--stacked"></div>
     `;
     detailPanel.appendChild(fileDiffPanel);
 
@@ -313,7 +314,7 @@ async function render(): Promise<void> {
 
     // C2: 提交详情 (下半部分)
     const commitDetailPanel = html`
-      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"></div>
+      <div class="gm-pane"></div>
     `;
     detailPanel.appendChild(commitDetailPanel);
 
@@ -325,7 +326,7 @@ async function render(): Promise<void> {
     // 底部区域：可折叠的面板容器 + Tab 栏
     // 三个页签共用同一容器，切换时重建对应面板
     const bottomPanel = html`
-      <div data-bottom-panel style="display: none; height: 220px; min-height: 120px; border-top: 1px solid #333; overflow: hidden;"></div>
+      <div data-bottom-panel class="gm-bottom"></div>
     `;
     root.appendChild(bottomPanel);
 
@@ -351,12 +352,12 @@ async function render(): Promise<void> {
       bottomPanel.innerHTML = '';
 
       if (activeTab === 'git') {
-        bottomPanel.style.display = 'none';
+        bottomPanel.dataset.open = 'false';
       } else if (activeTab === 'console') {
-        bottomPanel.style.display = 'block';
+        bottomPanel.dataset.open = 'true';
         bottomHandle = createConsolePanel(bottomPanel, service, getDir());
       } else {
-        bottomPanel.style.display = 'block';
+        bottomPanel.dataset.open = 'true';
         bottomHandle = createWorktreesPanel(bottomPanel, service, getDir(), host);
       }
       updateTabStyles();
@@ -372,8 +373,7 @@ async function render(): Promise<void> {
     function updateTabStyles(): void {
       tabBar.querySelectorAll<HTMLElement>('[data-tab]').forEach((el) => {
         const isActive = el.dataset.tab === activeTab && activeTab !== 'git';
-        el.style.color = isActive ? '#fff' : '#888';
-        el.style.background = isActive ? '#1e1e1e' : 'transparent';
+        el.setAttribute('aria-selected', String(isActive));
       });
     }
 
@@ -447,11 +447,11 @@ function createProgressBar(element: HTMLElement): ProgressBar {
  */
 function createTabBar(onSwitch: (tab: 'git' | 'console' | 'worktrees') => void): HTMLElement {
   const bar = html`
-    <div style="flex-shrink: 0; border-top: 1px solid #333;">
-      <div style="display: flex; background: #2d2d2d; padding: 0; align-items: center;">
-        <div data-tab="git" style="padding: 4px 12px; font-size: 11px; color: #fff; background: #1e1e1e; border-right: 1px solid #333; cursor: pointer;">Git</div>
-        <div data-tab="console" style="padding: 4px 12px; font-size: 11px; color: #888; cursor: pointer; border-right: 1px solid #333;">${t('main.tabConsole')}</div>
-        <div data-tab="worktrees" style="padding: 4px 12px; font-size: 11px; color: #888; cursor: pointer;">Worktrees</div>
+    <div class="gm-tabbar">
+      <div class="gm-tabbar__row" role="tablist">
+        <div data-tab="git" class="gm-tab" role="tab" aria-selected="false">Git</div>
+        <div data-tab="console" class="gm-tab" role="tab" aria-selected="false">${t('main.tabConsole')}</div>
+        <div data-tab="worktrees" class="gm-tab" role="tab" aria-selected="false">Worktrees</div>
       </div>
     </div>
   `;
@@ -800,8 +800,12 @@ async function checkGitRepository(): Promise<boolean> {
 }
 
 async function init(): Promise<void> {
-  // 菜单文案语言跟随宿主设置
+  // Host theme tokens live on <html>; applying them also reveals the document
+  // (see the data-oc-theme gate in styles.css).
+  const theme = installHostTheme(document.documentElement);
+  // Menu language follows the host setting.
   host.onReady((context) => {
+    theme.apply(context);
     setLocale(context.locale);
   });
   host.onDirectory((dir) => {

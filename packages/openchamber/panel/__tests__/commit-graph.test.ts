@@ -43,7 +43,7 @@ describe('commit-graph', () => {
       const rows = calculateGraphRows([createCommit('A')]);
 
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toEqual([{ hash: 'A', column: 0, color: '#589df6' }]);
+      expect(rows[0]).toEqual([{ hash: 'A', column: 0, color: 'var(--oc-primary)' }]);
     });
 
     it('线性提交链应复用同一列', () => {
@@ -58,7 +58,7 @@ describe('commit-graph', () => {
       for (const row of rows) {
         expect(row).toHaveLength(1);
         expect(row[0].column).toBe(0);
-        expect(row[0].color).toBe('#589df6');
+        expect(row[0].color).toBe('var(--oc-primary)');
       }
       // 列内 hash 取 columnMap 中该列首个插入的哈希
       expect(rows[0][0].hash).toBe('A');
@@ -75,8 +75,8 @@ describe('commit-graph', () => {
       expect(rows).toHaveLength(3);
       // 第一父复用当前列 0，第二父拿到新列 1
       expect(rows[0]).toEqual([
-        { hash: 'M', column: 0, color: '#589df6' },
-        { hash: 'P2', column: 1, color: '#4caf50' },
+        { hash: 'M', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'P2', column: 1, color: 'var(--oc-muted)' },
       ]);
       // 后续行仍展示全部活跃列
       expect(rows[1]).toEqual(rows[0]);
@@ -94,8 +94,8 @@ describe('commit-graph', () => {
       // 第一父与提交同列
       expect(rows[0][0].hash).toBe('M');
       // 6 色循环：列 5 用第 6 色（青），列 6 回到第 1 色（蓝）
-      expect(rows[0][5].color).toBe('#00bcd4');
-      expect(rows[0][6].color).toBe('#589df6');
+      expect(rows[0][5].color).toBe('var(--oc-info)');
+      expect(rows[0][6].color).toBe('var(--oc-primary)');
     });
 
     it('已分配过列的提交应复用原列而非新起一列', () => {
@@ -114,8 +114,8 @@ describe('commit-graph', () => {
     it('最后一行（无下一行）只绘制到中点的垂直线与节点', () => {
       const commit = createCommit('A', ['B']);
       const rowColumns = [
-        { hash: 'A', column: 0, color: '#589df6' },
-        { hash: 'B', column: 1, color: '#4caf50' },
+        { hash: 'A', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'B', column: 1, color: 'var(--oc-muted)' },
       ];
 
       const svg = generateRowGraphSVG(commit, rowColumns, undefined, 0);
@@ -127,25 +127,25 @@ describe('commit-graph', () => {
       expect(svg).toContain('y2="12"');
       expect(svg).not.toContain('y2="24"');
       // 节点落在第 0 列
-      expect(svg).toContain('<circle cx="8" cy="12" r="4" fill="#589df6"/>');
+      expect(svg).toContain('<circle cx="8" cy="12" r="4" style="fill: var(--oc-primary)"/>');
     });
 
     it('列延续到下一行时绘制全高垂直线', () => {
       const commit = createCommit('A', ['B']);
       const rowColumns = [
-        { hash: 'A', column: 0, color: '#589df6' },
-        { hash: 'B', column: 1, color: '#4caf50' },
+        { hash: 'A', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'B', column: 1, color: 'var(--oc-muted)' },
       ];
       const nextRowColumns = [
-        { hash: 'X', column: 0, color: '#589df6' },
-        { hash: 'Y', column: 1, color: '#4caf50' },
+        { hash: 'X', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'Y', column: 1, color: 'var(--oc-muted)' },
       ];
 
       const svg = generateRowGraphSVG(commit, rowColumns, nextRowColumns, 0);
 
       expect(countLines(svg)).toBe(2);
-      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="24" stroke="#589df6" stroke-width="2"/>');
-      expect(svg).toContain('<line x1="24" y1="0" x2="24" y2="24" stroke="#4caf50" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="24" style="stroke: var(--oc-primary)" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="24" y1="0" x2="24" y2="24" style="stroke: var(--oc-muted)" stroke-width="2"/>');
       // 没有新开始的列
       expect(svg).not.toContain('y1="12" y2="24"');
     });
@@ -153,58 +153,58 @@ describe('commit-graph', () => {
     it('列在下一行结束时绘制半高垂直线', () => {
       const commit = createCommit('A', ['B']);
       const rowColumns = [
-        { hash: 'A', column: 0, color: '#589df6' },
-        { hash: 'B', column: 1, color: '#4caf50' },
+        { hash: 'A', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'B', column: 1, color: 'var(--oc-muted)' },
       ];
-      const nextRowColumns = [{ hash: 'X', column: 0, color: '#589df6' }];
+      const nextRowColumns = [{ hash: 'X', column: 0, color: 'var(--oc-primary)' }];
 
       const svg = generateRowGraphSVG(commit, rowColumns, nextRowColumns, 0);
 
       expect(countLines(svg)).toBe(2);
       // 列 0 延续到下一行
-      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="24" stroke="#589df6" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="24" style="stroke: var(--oc-primary)" stroke-width="2"/>');
       // 列 1 在本行中点结束
-      expect(svg).toContain('<line x1="24" y1="0" x2="24" y2="12" stroke="#4caf50" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="24" y1="0" x2="24" y2="12" style="stroke: var(--oc-muted)" stroke-width="2"/>');
     });
 
     it('下一行新出现的列应绘制从中点开始的线', () => {
       const commit = createCommit('A');
-      const rowColumns = [{ hash: 'A', column: 0, color: '#589df6' }];
+      const rowColumns = [{ hash: 'A', column: 0, color: 'var(--oc-primary)' }];
       const nextRowColumns = [
-        { hash: 'A', column: 0, color: '#589df6' },
-        { hash: 'B', column: 1, color: '#4caf50' },
+        { hash: 'A', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'B', column: 1, color: 'var(--oc-muted)' },
       ];
 
       const svg = generateRowGraphSVG(commit, rowColumns, nextRowColumns, 0);
 
       expect(countLines(svg)).toBe(2);
-      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="24" stroke="#589df6" stroke-width="2"/>');
-      expect(svg).toContain('<line x1="24" y1="12" x2="24" y2="24" stroke="#4caf50" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="24" style="stroke: var(--oc-primary)" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="24" y1="12" x2="24" y2="24" style="stroke: var(--oc-muted)" stroke-width="2"/>');
     });
 
     it('合并提交应在两个父列之间绘制水平合并线', () => {
       const commit = createCommit('M', ['P1', 'P2']);
       const rowColumns = [
-        { hash: 'M', column: 2, color: '#ff9800' },
-        { hash: 'P1', column: 0, color: '#589df6' },
-        { hash: 'P2', column: 1, color: '#4caf50' },
+        { hash: 'M', column: 2, color: 'var(--oc-info)' },
+        { hash: 'P1', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'P2', column: 1, color: 'var(--oc-muted)' },
       ];
 
       const svg = generateRowGraphSVG(commit, rowColumns, [...rowColumns], 0);
 
       // 三条延续的全高垂直线 + 一条水平合并线
       expect(countLines(svg)).toBe(4);
-      expect(svg).toContain('<line x1="8" y1="12" x2="24" y2="12" stroke="#ff9800" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="8" y1="12" x2="24" y2="12" style="stroke: var(--oc-info)" stroke-width="2"/>');
       // 节点使用提交自身列的颜色
-      expect(svg).toContain('<circle cx="40" cy="12" r="4" fill="#ff9800"/>');
+      expect(svg).toContain('<circle cx="40" cy="12" r="4" style="fill: var(--oc-info)"/>');
     });
 
     it('提交不在行内时节点应回退到第 0 列与默认色', () => {
-      const rowColumns = [{ hash: 'A', column: 1, color: '#4caf50' }];
+      const rowColumns = [{ hash: 'A', column: 1, color: 'var(--oc-muted)' }];
 
       const svg = generateRowGraphSVG(createCommit('Z'), rowColumns, [...rowColumns], 0);
 
-      expect(svg).toContain('<circle cx="8" cy="12" r="4" fill="#589df6"/>');
+      expect(svg).toContain('<circle cx="8" cy="12" r="4" style="fill: var(--oc-primary)"/>');
     });
   });
 
@@ -214,13 +214,13 @@ describe('commit-graph', () => {
       const rows = calculateGraphRows([createCommit('M', parents)]);
 
       expect(rows[0].map(c => c.color)).toEqual([
-        '#589df6',
-        '#4caf50',
-        '#ff9800',
-        '#f44336',
-        '#9c27b0',
-        '#00bcd4',
-        '#589df6',
+        'var(--oc-primary)',
+        'var(--oc-muted)',
+        'var(--oc-info)',
+        'var(--oc-warning)',
+        'var(--oc-success)',
+        'var(--oc-info)',
+        'var(--oc-primary)',
       ]);
     });
 
@@ -232,8 +232,8 @@ describe('commit-graph', () => {
 
       // A 已占第 0 列，B 占第 1 列，父分配逻辑不得覆盖 A 的既有列
       expect(rows[1]).toEqual([
-        { hash: 'A', column: 0, color: '#589df6' },
-        { hash: 'B', column: 1, color: '#4caf50' },
+        { hash: 'A', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'B', column: 1, color: 'var(--oc-muted)' },
       ]);
     });
 
@@ -252,7 +252,7 @@ describe('commit-graph', () => {
       expect(countLines(svg)).toBe(4);
       expect(svg).not.toContain('y1="12" y2="12"');
       // 节点回退到第 0 列默认色
-      expect(svg).toContain('<circle cx="8" cy="12" r="4" fill="#589df6"/>');
+      expect(svg).toContain('<circle cx="8" cy="12" r="4" style="fill: var(--oc-primary)"/>');
     });
 
     it('第一父与提交同列导致父列缺失时不应抛错也不画合并线', () => {
@@ -279,22 +279,22 @@ describe('commit-graph', () => {
       const svg = generateRowGraphSVG(m, rows[2], [...rows[2]], 0);
 
       // 第一父 B 在第 1 列 → x1 = 8 + 1*16 = 24；第二父 A 在第 0 列 → x2 = 8
-      expect(svg).toContain('<line x1="24" y1="12" x2="8" y2="12" stroke="#ff9800" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="24" y1="12" x2="8" y2="12" style="stroke: var(--oc-info)" stroke-width="2"/>');
       // 节点在第 2 列 → cx = 8 + 2*16 = 40，颜色取第 3 色
-      expect(svg).toContain('<circle cx="40" cy="12" r="4" fill="#ff9800"/>');
+      expect(svg).toContain('<circle cx="40" cy="12" r="4" style="fill: var(--oc-info)"/>');
     });
 
     it('最后一行各列垂直线应按列坐标绘制', () => {
       const commit = createCommit('A', ['B']);
       const rowColumns = [
-        { hash: 'A', column: 0, color: '#589df6' },
-        { hash: 'B', column: 1, color: '#4caf50' },
+        { hash: 'A', column: 0, color: 'var(--oc-primary)' },
+        { hash: 'B', column: 1, color: 'var(--oc-muted)' },
       ];
 
       const svg = generateRowGraphSVG(commit, rowColumns, undefined, 0);
 
-      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="12" stroke="#589df6" stroke-width="2"/>');
-      expect(svg).toContain('<line x1="24" y1="0" x2="24" y2="12" stroke="#4caf50" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="8" y1="0" x2="8" y2="12" style="stroke: var(--oc-primary)" stroke-width="2"/>');
+      expect(svg).toContain('<line x1="24" y1="0" x2="24" y2="12" style="stroke: var(--oc-muted)" stroke-width="2"/>');
     });
   });
 });

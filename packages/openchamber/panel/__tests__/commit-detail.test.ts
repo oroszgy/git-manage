@@ -234,13 +234,14 @@ describe('commit-detail', () => {
       expect(authorField.children[0].textContent).toBe('作者');
       expect(dateField.children[0].textContent).toBe('日期');
 
-      // hash 字段带等宽字体
-      expect(hashField.children[1].getAttribute('style')).toContain('font-family: monospace;');
+      // Only the hash field is monospace; styling comes from classes now.
+      expect(hashField.children[1].classList.contains('gm-mono')).toBe(true);
       expect(hashField.children[1].textContent).toContain(sampleCommit.hash);
 
-      // 其余字段不带等宽字体声明（模板中该位置为空串）
-      expect(authorField.children[1].getAttribute('style')).toBe('color: #ccc; word-break: break-all; ');
-      expect(dateField.children[1].getAttribute('style')).toBe('color: #ccc; word-break: break-all; ');
+      expect(authorField.children[1].classList.contains('gm-mono')).toBe(false);
+      expect(dateField.children[1].classList.contains('gm-mono')).toBe(false);
+      expect(authorField.children[1].getAttribute('style')).toBeNull();
+      expect(dateField.children[1].getAttribute('style')).toBeNull();
     });
   });
 });

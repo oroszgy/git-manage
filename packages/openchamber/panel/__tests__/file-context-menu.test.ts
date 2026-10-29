@@ -53,19 +53,23 @@ function findMenuItem(menu: HTMLElement, label: string): HTMLElement | undefined
 }
 
 /**
- * 断言样式颜色值（兼容 3/6 位 hex，jsdom 可能把 hex 规范化为 rgb 字符串）
- * @param actual 实际样式值
- * @param hex 期望的十六进制颜色
+ * 取菜单的直接菜单项（不含分隔线）
+ * @param menu 菜单容器
+ * @returns 菜单项元素数组
  */
-function expectStyleColor(actual: string, hex: string): void {
-  // 3 位 hex 展开为 6 位
-  const full = hex.length === 4
-    ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-    : hex;
-  const r = parseInt(full.slice(1, 3), 16);
-  const g = parseInt(full.slice(3, 5), 16);
-  const b = parseInt(full.slice(5, 7), 16);
-  expect([hex, full, `rgb(${r}, ${g}, ${b})`]).toContain(actual);
+function getMenuItems(menu: HTMLElement): HTMLElement[] {
+  return (Array.from(menu.children) as HTMLElement[])
+    .filter(el => el.classList.contains('gm-menu-item'));
+}
+
+/**
+ * 取菜单的直接分隔线（样式表 .gm-popup__sep）
+ * @param menu 菜单容器
+ * @returns 分隔线元素数组
+ */
+function getSeparators(menu: HTMLElement): HTMLElement[] {
+  return (Array.from(menu.children) as HTMLElement[])
+    .filter(el => el.classList.contains('gm-popup__sep'));
 }
 
 /**
@@ -109,22 +113,24 @@ describe('file-context-menu', () => {
       trigger.dispatchEvent(createContextMenuEvent());
 
       const menu = getMenu();
-      expect(menu.style.position).toBe('fixed');
+      // 容器外观来自样式表类；只有坐标在打开时内联写入
+      expect(menu.classList.contains('gm-popup')).toBe(true);
+      expect(menu.style.position).toBe('');
       expect(menu.style.left).toBe('10px');
       expect(menu.style.top).toBe('10px');
 
-      const labels = (Array.from(menu.children) as HTMLElement[])
-        .filter(el => el.style.height !== '1px')
-        .map(el => el.textContent);
+      const labels = getMenuItems(menu).map(el => el.textContent);
       expect(labels).toEqual(ALL_LABELS);
 
-      // 4 条分隔线
-      const separators = (Array.from(menu.children) as HTMLElement[]).filter(el => el.style.height === '1px');
+      // 4 条分隔线：纯 div，无文案、无内联修饰
+      const separators = getSeparators(menu);
       expect(separators).toHaveLength(4);
-      expectStyleColor(separators[0].style.background, '#444');
+      expect(separators[0].tagName).toBe('DIV');
+      expect(separators[0].textContent).toBe('');
+      expect(separators[0].getAttribute('style')).toBeNull();
     });
 
-    it('回滚选中更改应显示为危险红色，普通项为默认样式', () => {
+    it('回滚选中更改应带破坏性样式类，普通项只带基础类', () => {
       showFileContextMenu(createContextMenuEvent(), fileDiff, {} as ServiceClient, DIRECTORY);
 
       const menu = getMenu();
@@ -132,22 +138,28 @@ describe('file-context-menu', () => {
       const normalItem = findMenuItem(menu, '显示差异');
 
       expect(dangerItem).toBeTruthy();
-      expectStyleColor(dangerItem!.style.color, '#f44336');
+      expect(dangerItem!.classList.contains('gm-menu-item')).toBe(true);
+      expect(dangerItem!.classList.contains('gm-menu-item--destructive')).toBe(true);
       expect(normalItem).toBeTruthy();
-      expectStyleColor(normalItem!.style.color, '#ccc');
-      expect(normalItem!.style.cursor).toBe('pointer');
+      expect(normalItem!.classList.contains('gm-menu-item')).toBe(true);
+      expect(normalItem!.classList.contains('gm-menu-item--destructive')).toBe(false);
+      // 颜色与光标由样式表提供，组件不再写内联
+      expect(dangerItem!.style.color).toBe('');
+      expect(normalItem!.style.color).toBe('');
+      expect(normalItem!.style.cursor).toBe('');
     });
 
-    it('悬停菜单项应显示高亮，移出后恢复透明', () => {
+    it('悬停与移出菜单项不应写内联背景（高亮由样式表 :hover 提供）', () => {
       showFileContextMenu(createContextMenuEvent(), fileDiff, {} as ServiceClient, DIRECTORY);
 
       const item = findMenuItem(getMenu(), '显示差异')!;
-      item.dispatchEvent(new MouseEvent('mouseenter'));
-      expect(item.style.background).not.toBe('');
-      expect(item.style.background).not.toBe('transparent');
-
-      item.dispatchEvent(new MouseEvent('mouseleave'));
-      expect(item.style.background).toBe('transparent');
+      expect(() => {
+        item.dispatchEvent(new MouseEvent('mouseenter'));
+        item.dispatchEvent(new MouseEvent('mouseleave'));
+      }).not.toThrow();
+      expect(item.style.background).toBe('');
+      // 事件未被拦截：菜单仍然打开
+      expect(document.getElementById('git-file-context-menu')).toBeTruthy();
     });
 
     it('点击显示差异应记录日志并关闭菜单', async () => {
@@ -186,7 +198,7 @@ describe('file-context-menu', () => {
       vi.runAllTimers();
 
       const menu = getMenu();
-      const separator = (Array.from(menu.children) as HTMLElement[]).find(el => el.style.height === '1px')!;
+      const separator = getSeparators(menu)[0];
       separator.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
       expect(document.getElementById('git-file-context-menu')).toBeTruthy();
@@ -250,27 +262,37 @@ describe('file-context-menu', () => {
       }
     });
 
-    it('菜单项与分隔线应应用默认内联样式', () => {
+    it('菜单项与分隔线只使用样式表类，内联仅保留坐标', () => {
       showFileContextMenu(createContextMenuEvent(), fileDiff, {} as ServiceClient, DIRECTORY);
 
       const menu = getMenu();
-      const item = findMenuItem(menu, '显示差异')!;
-      expect(item.style.padding).toBe('6px 12px');
-      expect(item.style.fontSize).toBe('12px');
+      expect(menu.classList.contains('gm-popup')).toBe(true);
+      expect(menu.style.left).toBe('10px');
+      expect(menu.style.top).toBe('10px');
+      expect(menu.style.minWidth).toBe('');
 
-      const sep = (Array.from(menu.children) as HTMLElement[]).find(el => el.style.height === '1px') as HTMLElement;
-      expect(sep.style.margin).toMatch(/^4px 0(px)?$/);
+      const item = findMenuItem(menu, '显示差异')!;
+      expect(item.classList.contains('gm-menu-item')).toBe(true);
+      expect(item.dataset.disabled).toBe('false');
+      expect(item.style.padding).toBe('');
+      expect(item.style.fontSize).toBe('');
+
+      const sep = getSeparators(menu)[0];
+      expect(sep.classList.contains('gm-popup__sep')).toBe(true);
+      expect(sep.getAttribute('style')).toBeNull();
     });
 
-    it('鼠标位于菜单容器自身时不触发高亮与恢复', () => {
+    it('鼠标位于菜单容器自身时不写内联高亮或恢复', () => {
       showFileContextMenu(createContextMenuEvent(), fileDiff, {} as ServiceClient, DIRECTORY);
 
       const menu = getMenu();
-      menu.dispatchEvent(new MouseEvent('mouseenter'));
-      expectStyleColor(menu.style.background, '#2d2d2d');
-
-      menu.dispatchEvent(new MouseEvent('mouseleave'));
-      expectStyleColor(menu.style.background, '#2d2d2d');
+      expect(() => {
+        menu.dispatchEvent(new MouseEvent('mouseenter'));
+        menu.dispatchEvent(new MouseEvent('mouseleave'));
+      }).not.toThrow();
+      // 高亮完全由样式表决定，容器没有内联背景
+      expect(menu.style.background).toBe('');
+      expect(menu.classList.contains('gm-popup')).toBe(true);
     });
 
     it('点击菜单项内的嵌套元素不应执行动作或关闭菜单', async () => {

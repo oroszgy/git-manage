@@ -234,16 +234,10 @@ export function showContextMenu(
 
   const menu = document.createElement("div");
   menu.id = "git-context-menu";
-  menu.style.position = "fixed";
+  menu.className = "gm-popup gm-popup--wide";
+  // 坐标在打开时按指针计算，属于运行时数据；外观全部来自 .gm-popup
   menu.style.left = `${e.clientX}px`;
   menu.style.top = `${e.clientY}px`;
-  menu.style.background = "#2d2d2d";
-  menu.style.border = "1px solid #444";
-  menu.style.borderRadius = "4px";
-  menu.style.padding = "4px 0";
-  menu.style.zIndex = "1000";
-  menu.style.minWidth = "160px";
-  menu.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.5)";
 
   // 删除目标：多选时作用于全部选中分支；未多选时就是右键的这个分支。
   // 参数语义与侧栏删除按钮一致：selectedBranches 非空时以多选为准
@@ -346,38 +340,21 @@ export function showContextMenu(
   for (const item of items) {
     if ("type" in item && item.type === "separator") {
       const sep = document.createElement("div");
-      sep.style.height = "1px";
-      sep.style.background = "#444";
-      sep.style.margin = "4px 0";
+      sep.className = "gm-popup__sep";
       menu.appendChild(sep);
       continue;
     }
 
     const menuItem = item as MenuItem;
     const el = document.createElement("div");
+    el.className = menuItem.danger ? "gm-menu-item gm-menu-item--destructive" : "gm-menu-item";
+    el.dataset.disabled = menuItem.disabled ? "true" : "false";
     el.textContent = menuItem.label;
-    el.style.padding = "6px 12px";
-    el.style.cursor = menuItem.disabled ? "default" : "pointer";
-    el.style.fontSize = "12px";
-    el.style.color = menuItem.disabled ? "#666" : menuItem.danger ? "#f44336" : "#ccc";
 
     menu.appendChild(el);
   }
 
-  // 事件委托：悬停效果和点击（禁用项跳过高亮且不执行动作）
-  menu.addEventListener('mouseenter', (e) => {
-    const target = (e.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu && !findItemByLabel(target.textContent)?.disabled) {
-      target.style.background = "#3a3a3a";
-    }
-  }, true);
-
-  menu.addEventListener('mouseleave', (e) => {
-    const target = (e.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu) {
-      target.style.background = "transparent";
-    }
-  }, true);
+  // 悬停高亮由样式表 .gm-menu-item:hover 承担，禁用项由 [data-disabled="true"] 兜底
 
   menu.addEventListener('click', async (e) => {
     const target = (e.target as HTMLElement).closest('div');
@@ -385,7 +362,7 @@ export function showContextMenu(
 
     const item = findItemByLabel(target.textContent);
     // 禁用项（如当前分支的删除）点击不执行动作、不关闭菜单
-    if (!item || item.disabled) return;
+    if (!item || target.dataset.disabled === 'true') return;
     hideContextMenu();
     await item.action();
   });
@@ -433,54 +410,30 @@ export function showCommitContextMenu(
     items.find(i => !("type" in i) && (i as MenuItem).label === label) as MenuItem | undefined;
 
   const menu = html`
-    <div id="git-context-menu" style="
-      position: fixed;
-      left: ${e.clientX}px;
-      top: ${e.clientY}px;
-      background: #2d2d2d;
-      border: 1px solid #444;
-      border-radius: 4px;
-      padding: 4px 0;
-      z-index: 1000;
-      min-width: 200px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-    "></div>
+    <div id="git-context-menu" class="gm-popup gm-popup--wide"></div>
   `;
+  // 坐标在打开时按指针计算，属于运行时数据；外观全部来自 .gm-popup
+  menu.style.left = `${e.clientX}px`;
+  menu.style.top = `${e.clientY}px`;
 
   for (const item of items) {
     if ("type" in item && item.type === "separator") {
       const sep = document.createElement("div");
-      sep.style.height = "1px";
-      sep.style.background = "#444";
-      sep.style.margin = "4px 0";
+      sep.className = "gm-popup__sep";
       menu.appendChild(sep);
       continue;
     }
 
     const menuItem = item as MenuItem;
     const el = document.createElement("div");
+    el.className = menuItem.danger ? "gm-menu-item gm-menu-item--destructive" : "gm-menu-item";
+    el.dataset.disabled = menuItem.disabled ? "true" : "false";
     el.textContent = menuItem.label;
-    el.style.padding = "6px 12px";
-    el.style.cursor = menuItem.disabled ? "default" : "pointer";
-    el.style.fontSize = "12px";
-    el.style.color = menuItem.disabled ? "#666" : menuItem.danger ? "#f44336" : "#ccc";
 
     menu.appendChild(el);
   }
 
-  menu.addEventListener('mouseenter', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu && !findItemByLabel(target.textContent)?.disabled) {
-      target.style.background = "#3a3a3a";
-    }
-  }, true);
-
-  menu.addEventListener('mouseleave', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu) {
-      target.style.background = "transparent";
-    }
-  }, true);
+  // 悬停高亮由样式表 .gm-menu-item:hover 承担，禁用项由 [data-disabled="true"] 兜底
 
   menu.addEventListener('click', async (ev) => {
     const target = (ev.target as HTMLElement).closest('div');
@@ -488,7 +441,7 @@ export function showCommitContextMenu(
 
     const item = findItemByLabel(target.textContent);
     // 禁用项（如批量菜单的"已选中"标题）点击不执行动作、不关闭菜单
-    if (!item || item.disabled) return;
+    if (!item || target.dataset.disabled === 'true') return;
     hideContextMenu();
     await item.action();
   });
@@ -892,29 +845,27 @@ function buildBatchCommitItems(
 /** 显示 Reset 对话框 */
 function showResetDialog(commit: CommitInfo, service: ServiceClient, directory: string): void {
   const overlay = html`
-    <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1001;">
-      <div style="background: #2d2d2d; border: 1px solid #444; border-radius: 6px; padding: 16px; width: 360px;">
-        <div style="font-size: 14px; color: #ccc; margin-bottom: 12px;">${t('reset.title')}</div>
-        <div style="font-size: 12px; color: #888; margin-bottom: 12px; word-break: break-all;">
-          ${commit.shortHash} - ${commit.message}
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #ccc; cursor: pointer;">
+    <div class="gm-dialog-backdrop">
+      <div class="gm-dialog gm-dialog--wide">
+        <div class="gm-dialog__title">${t('reset.title')}</div>
+        <div class="gm-dialog__hint">${commit.shortHash} - ${commit.message}</div>
+        <div class="gm-dialog__choices">
+          <label class="gm-check">
             <input type="radio" name="reset-mode" value="soft" checked />
             <span><b>--soft</b> ${t('reset.softDesc')}</span>
           </label>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #ccc; cursor: pointer;">
+          <label class="gm-check">
             <input type="radio" name="reset-mode" value="mixed" />
             <span><b>--mixed</b> ${t('reset.mixedDesc')}</span>
           </label>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #ccc; cursor: pointer;">
+          <label class="gm-check">
             <input type="radio" name="reset-mode" value="hard" />
             <span><b>--hard</b> ${t('reset.hardDesc')}</span>
           </label>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <button id="reset-cancel" style="padding: 4px 12px; background: #333; border: 1px solid #444; border-radius: 3px; color: #ccc; cursor: pointer;">${t('dialog.cancel')}</button>
-          <button id="reset-ok" style="padding: 4px 12px; background: #d32f2f; border: 1px solid #f44336; border-radius: 3px; color: #fff; cursor: pointer;">Reset</button>
+        <div class="gm-dialog__actions">
+          <button id="reset-cancel" class="gm-btn">${t('dialog.cancel')}</button>
+          <button id="reset-ok" class="gm-btn gm-btn--destructive-filled">Reset</button>
         </div>
       </div>
     </div>

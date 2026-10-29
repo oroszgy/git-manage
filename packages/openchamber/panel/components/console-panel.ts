@@ -53,35 +53,36 @@ export function createConsolePanel(
   let selectedId: number | null = null;
 
   container.innerHTML = '';
-  // 不覆盖容器尺寸：由调用方控制，面板自身占满下层
-  container.style.display = 'flex';
-  container.style.flexDirection = 'column';
-  container.style.minHeight = '0';
+  // Container size belongs to the caller; the panel only fills it.
+  const root = html`
+    <div class="gm-console"></div>
+  `;
+  container.appendChild(root);
 
   const header = html`
-    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid #333; flex-shrink: 0; font-size: 11px; color: #888;">
+    <div class="gm-console__head">
       <span data-log-count>0</span>
       <span>${t('console.commandCount')}</span>
-      <span style="flex: 1;"></span>
-      <button data-log-clear style="padding: 1px 8px; background: #333; border: 1px solid #444; border-radius: 3px; color: #ccc; cursor: pointer; font-size: 11px;">${t('console.clear')}</button>
+      <span class="gm-console__spacer"></span>
+      <button type="button" data-log-clear class="gm-btn gm-btn--small">${t('console.clear')}</button>
     </div>
   `;
-  container.appendChild(header);
+  root.appendChild(header);
 
   const body = html`
-    <div style="flex: 1; display: flex; overflow: hidden; min-height: 0;"></div>
+    <div class="gm-console__body"></div>
   `;
-  container.appendChild(body);
+  root.appendChild(body);
 
-  // 左侧：命令列表
+  // Left: command list
   const listEl = html`
-    <div data-log-list style="width: 320px; min-width: 220px; overflow-y: auto; border-right: 1px solid #333;"></div>
+    <div data-log-list class="gm-console__list"></div>
   `;
   body.appendChild(listEl);
 
-  // 右侧：选中命令的完整输出
+  // Right: full output of the selected command
   const outputEl = html`
-    <div data-log-output style="flex: 1; overflow: auto; padding: 6px 8px; font-family: monospace; font-size: 11px; color: #ccc; white-space: pre-wrap; word-break: break-all;"></div>
+    <div data-log-output class="gm-console__output"></div>
   `;
   body.appendChild(outputEl);
 
@@ -96,7 +97,7 @@ export function createConsolePanel(
 
     if (entries.length === 0) {
       const empty = document.createElement('div');
-      empty.style.cssText = 'padding: 12px 8px; color: #666; font-size: 11px;';
+      empty.className = 'gm-console__empty';
       empty.textContent = t('console.noCommands');
       listEl.appendChild(empty);
       return;
@@ -106,20 +107,18 @@ export function createConsolePanel(
     for (const entry of [...entries].reverse()) {
       const row = document.createElement('div');
       row.dataset.logId = String(entry.id);
-      row.style.cssText = `padding: 4px 8px; cursor: pointer; border-bottom: 1px solid #2a2a2a; font-size: 11px; ${
-        selectedId === entry.id ? 'background: #2e4a6e;' : ''
-      }`;
+      row.className = 'gm-console__row';
+      row.setAttribute('aria-selected', String(selectedId === entry.id));
 
       const cmd = document.createElement('div');
-      cmd.style.cssText = `overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${
-        entry.ok ? 'color: #ccc;' : 'color: #f48771;'
-      }`;
+      cmd.className = 'gm-console__cmd';
+      if (!entry.ok) cmd.dataset.state = 'error';
       cmd.textContent = entry.command;
       cmd.title = entry.command;
       row.appendChild(cmd);
 
       const meta = document.createElement('div');
-      meta.style.cssText = 'color: #666; margin-top: 2px;';
+      meta.className = 'gm-console__meta';
       meta.textContent = `${formatTime(entry.startedAt)} · ${entry.durationMs}ms · ${entry.ok ? '0' : entry.exitCode}`;
       row.appendChild(meta);
 
