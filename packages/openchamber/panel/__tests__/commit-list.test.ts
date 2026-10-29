@@ -1194,7 +1194,7 @@ describe('commit-list', () => {
     (document.getElementById('goto-ok') as HTMLElement).click();
 
     const error = document.getElementById('goto-error') as HTMLElement;
-    expect(error.style.display).toBe('block');
+    expect(error.hidden).toBe(false);
     expect(error.textContent).toBe('未找到匹配项');
     // 对话框未关闭，状态未变化
     expect(document.getElementById('goto-input')).toBeTruthy();

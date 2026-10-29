@@ -1159,6 +1159,8 @@ textarea {
   flex: 0 0 12px;
   width: 12px;
   font-size: 9px;
+  text-align: center;
+  user-select: none;
   color: var(--oc-muted);
   cursor: pointer;
 }
@@ -1699,4 +1701,32 @@ textarea {
   flex-direction: column;
   gap: 2px;
   margin-bottom: 2px;
+}
+
+/* Dialog body message (confirm / force-delete). */
+.gm-dialog__message {
+  margin-bottom: 16px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--oc-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Extra-wide cards for multi-line editors. */
+.gm-dialog--xwide {
+  width: 420px;
+}
+
+/* In-tree placeholders keep their own padding, away from the dialog rhythm. */
+.gm-tree-placeholder {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--oc-muted);
+}
+
+.gm-tree-error {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--oc-error);
 }

@@ -14,6 +14,8 @@ import {
   showPathFilterDialog,
   showPathTreeDialog,
   showDeleteBranchDialog,
+  showConfirmDialog,
+  showPromptDialog,
 } from '../components/dialogs';
 import { setState, createInitialState, getState } from '../state';
 import type { Branch } from '../state';
@@ -76,6 +78,44 @@ function clickOverlay(overlay: HTMLElement): void {
   overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+/** 按钮样式契约：中性 / 主操作 / 危险操作 */
+type ButtonVariant = 'primary' | 'neutral' | 'destructive';
+
+/** 断言按钮携带 styles.css 中作者定义的类（取代内联底色断言） */
+function expectButtonVariant(id: string, variant: ButtonVariant): void {
+  const button = document.getElementById(id) as HTMLElement | null;
+  if (!button) throw new Error(`未找到按钮: ${id}`);
+  expect(button.classList.contains('gm-btn')).toBe(true);
+  expect(button.classList.contains('gm-btn--primary')).toBe(variant === 'primary');
+  // A destructive confirm is filled red; the outlined variant only recolours text.
+  expect(button.classList.contains('gm-btn--destructive-filled')).toBe(variant === 'destructive');
+  expect(button.classList.contains('gm-btn--destructive')).toBe(false);
+}
+
+/**
+ * 断言对话框外壳的样式类契约：遮罩层 + 卡片（可选宽版）+ 标题 + 按钮行
+ * @param overlay 遮罩层元素
+ * @param opts.wide 是否断言宽版卡片 gm-dialog--wide
+ * @returns 卡片元素（供调用方继续断言内部结构）
+ */
+function expectDialogShell(overlay: HTMLElement, opts: { wide?: boolean } = {}): HTMLElement {
+  expect(overlay.classList.contains('gm-dialog-backdrop')).toBe(true);
+  const panel = overlay.firstElementChild as HTMLElement;
+  expect(panel.classList.contains('gm-dialog')).toBe(true);
+  expect(panel.classList.contains('gm-dialog--wide')).toBe(opts.wide === true);
+  // Every card opens with a title or, for confirmations, a message body.
+  expect(panel.querySelector('.gm-dialog__title, .gm-dialog__message')).toBeTruthy();
+  expect(panel.querySelector('.gm-dialog__actions')).toBeTruthy();
+  return panel;
+}
+
+/** 断言行内提示/错误区的可见性（hidden 属性是当前的显隐机制） */
+function expectHidden(id: string, hidden: boolean): void {
+  const el = document.getElementById(id);
+  expect(el).toBeTruthy();
+  expect((el as HTMLElement).hidden).toBe(hidden);
+}
+
 describe('dialogs', () => {
   let mock: ReturnType<typeof createServiceMock>;
   let service: ServiceClient;
@@ -109,11 +149,17 @@ describe('dialogs', () => {
       const overlay = getOverlay();
       expect(overlay.textContent).toContain(`重命名分支: ${branch.name}`);
 
+      const panel = expectDialogShell(overlay);
       const input = overlay.querySelector('#rename-input') as HTMLInputElement;
       expect(input).toBeTruthy();
       expect(input.value).toBe('old-name');
+      expect(input.classList.contains('gm-input')).toBe(true);
+      expect(panel.querySelector('.gm-dialog__title')?.textContent)
+        .toBe(`重命名分支: ${branch.name}`);
       expect(overlay.querySelector('#rename-ok')).toBeTruthy();
       expect(overlay.querySelector('#rename-cancel')).toBeTruthy();
+      expectButtonVariant('rename-ok', 'primary');
+      expectButtonVariant('rename-cancel', 'neutral');
     });
 
     it('输入新名称点确定应该调用 renameBranch/getBranches 并更新分支列表后关闭', async () => {
@@ -223,9 +269,20 @@ describe('dialogs', () => {
 
       const overlay = getOverlay();
       expect(overlay.textContent).toContain('新建分支');
+      const panel = expectDialogShell(overlay);
       expect(overlay.querySelector('#new-branch-input')).toBeTruthy();
       expect(overlay.querySelector('#create-ok')).toBeTruthy();
       expect(overlay.querySelector('#create-cancel')).toBeTruthy();
+
+      // 起点说明是次要说明行；输入框与勾选行各有作者类
+      const hint = panel.querySelector('.gm-dialog__hint') as HTMLElement;
+      expect(hint.textContent).toContain('起点：');
+      expect((overlay.querySelector('#new-branch-input') as HTMLElement).classList.contains('gm-input'))
+        .toBe(true);
+      const checkout = overlay.querySelector('#new-branch-checkout') as HTMLInputElement;
+      expect(checkout.closest('label')?.classList.contains('gm-check')).toBe(true);
+      expectButtonVariant('create-ok', 'primary');
+      expectButtonVariant('create-cancel', 'neutral');
     });
 
     it('输入名称点创建应该调用 createNewBranch/getBranches 并更新分支列表后关闭', async () => {
@@ -391,15 +448,28 @@ describe('dialogs', () => {
       const overlay = getOverlay();
       expect(overlay.textContent).toContain('按日期过滤');
 
+      const panel = expectDialogShell(overlay);
       const from = overlay.querySelector('#date-from') as HTMLInputElement;
       const to = overlay.querySelector('#date-to') as HTMLInputElement;
       expect(from).toBeTruthy();
       expect(to).toBeTruthy();
       expect(from.value).toBe('2026-01-01');
       expect(to.value).toBe('2026-01-31');
+      expect(from.classList.contains('gm-input')).toBe(true);
+      expect(to.classList.contains('gm-input')).toBe(true);
+
+      // 两个日期字段各有一个带标签的字段包装
+      const fields = panel.querySelectorAll('.gm-dialog__field');
+      expect(fields.length).toBe(2);
+      expect(fields[0].querySelector('.gm-dialog__label')?.textContent).toBe('开始日期');
+      expect(fields[1].querySelector('.gm-dialog__label')?.textContent).toBe('结束日期');
+
       expect(overlay.querySelector('#date-ok')).toBeTruthy();
       expect(overlay.querySelector('#date-clear')).toBeTruthy();
       expect(overlay.querySelector('#date-cancel')).toBeTruthy();
+      expectButtonVariant('date-ok', 'primary');
+      expectButtonVariant('date-clear', 'neutral');
+      expectButtonVariant('date-cancel', 'neutral');
     });
 
     it('设置日期点确定应该写入 filterDateFrom/filterDateTo 并关闭', () => {
@@ -468,6 +538,9 @@ describe('dialogs', () => {
       expect(overlay.textContent).toContain(`重置分支到 ${hash}`);
       expect(overlay.querySelector('#reset-modes')).toBeTruthy();
 
+      const panel = expectDialogShell(overlay, { wide: true });
+      expect(panel.querySelector('.gm-dialog__hint')?.textContent).toContain('选择重置模式');
+
       const radios = overlay.querySelectorAll('input[name="reset-mode"]');
       expect(radios.length).toBe(3);
 
@@ -478,8 +551,13 @@ describe('dialogs', () => {
       expect(soft.checked).toBe(false);
       expect(hard.checked).toBe(false);
 
+      // 每个模式是一行 gm-check（label 包裹 radio）
+      expect(overlay.querySelectorAll('#reset-modes > label.gm-check').length).toBe(3);
+
       expect(overlay.querySelector('#reset-ok')).toBeTruthy();
       expect(overlay.querySelector('#reset-cancel')).toBeTruthy();
+      expectButtonVariant('reset-ok', 'primary');
+      expectButtonVariant('reset-cancel', 'neutral');
     });
 
     it('保持默认 mixed 点重置应该调用 reset(dir, hash, mixed) 并更新分支列表后关闭', async () => {
@@ -580,12 +658,21 @@ describe('dialogs', () => {
       const overlay = getOverlay();
       expect(overlay.textContent).toContain('跳转到引用');
 
+      const panel = expectDialogShell(overlay);
       const input = overlay.querySelector('#goto-input') as HTMLInputElement;
       expect(input).toBeTruthy();
       expect(input.placeholder).toBe('输入哈希或分支名');
+      expect(input.classList.contains('gm-input')).toBe(true);
       expect(overlay.querySelector('#goto-ok')?.textContent).toBe('跳转');
       expect(overlay.querySelector('#goto-cancel')).toBeTruthy();
       expect(document.activeElement).toBe(input);
+
+      // 错误区是作者类错误提示，初始隐藏
+      const error = panel.querySelector('#goto-error') as HTMLElement;
+      expect(error.classList.contains('gm-dialog__error')).toBe(true);
+      expectHidden('goto-error', true);
+      expectButtonVariant('goto-ok', 'primary');
+      expectButtonVariant('goto-cancel', 'neutral');
     });
 
     it('onSubmit 返回 true 时应以裁剪后的查询值提交并关闭对话框', () => {
@@ -621,7 +708,7 @@ describe('dialogs', () => {
       (document.getElementById('goto-ok') as HTMLElement).click();
 
       const error = document.getElementById('goto-error') as HTMLElement;
-      expect(error.style.display).toBe('block');
+      expect(error.hidden).toBe(false);
       expect(error.textContent).toBe('未找到匹配项');
       // 对话框不关闭且输入保持
       expect(document.getElementById('goto-input')).toBeTruthy();
@@ -664,11 +751,11 @@ describe('dialogs', () => {
       const input = document.getElementById('goto-input') as HTMLInputElement;
       input.value = 'missing';
       (document.getElementById('goto-ok') as HTMLElement).click();
-      expect((document.getElementById('goto-error') as HTMLElement).style.display).toBe('block');
+      expect((document.getElementById('goto-error') as HTMLElement).hidden).toBe(false);
 
       input.value = 'other';
       input.dispatchEvent(new Event('input', { bubbles: true }));
-      expect((document.getElementById('goto-error') as HTMLElement).style.display).toBe('none');
+      expect((document.getElementById('goto-error') as HTMLElement).hidden).toBe(true);
     });
 
     it('英文 locale 下应渲染英文标题、占位符、按钮与未找到提示文案', () => {
@@ -698,14 +785,14 @@ describe('dialogs', () => {
       (document.getElementById('goto-ok') as HTMLElement).click();
 
       const error = document.getElementById('goto-error') as HTMLElement;
-      expect(error.style.display).toBe('block');
+      expect(error.hidden).toBe(false);
       expect(error.textContent).toBe('未找到匹配项');
 
       input.value = 'other';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
       // clearError 必须同时清空文案与隐藏，残留文案属于缺陷
-      expect(error.style.display).toBe('none');
+      expect(error.hidden).toBe(true);
       expect(error.textContent).toBe('');
     });
 
@@ -716,7 +803,7 @@ describe('dialogs', () => {
       const input = document.getElementById('goto-input') as HTMLInputElement;
       input.value = 'missing';
       (document.getElementById('goto-ok') as HTMLElement).click();
-      expect((document.getElementById('goto-error') as HTMLElement).style.display).toBe('block');
+      expect((document.getElementById('goto-error') as HTMLElement).hidden).toBe(false);
       expect(onSubmit).toHaveBeenCalledTimes(1);
 
       input.value = '  v1.2.3  ';
@@ -739,7 +826,7 @@ describe('dialogs', () => {
 
       expect(onSubmit).not.toHaveBeenCalled();
       expect(document.getElementById('goto-input')).toBeTruthy();
-      expect((document.getElementById('goto-error') as HTMLElement).style.display).toBe('none');
+      expect((document.getElementById('goto-error') as HTMLElement).hidden).toBe(true);
     });
 
     it('空输入时按回车不应调用 onSubmit 且对话框保持打开', () => {
@@ -752,7 +839,7 @@ describe('dialogs', () => {
 
       expect(onSubmit).not.toHaveBeenCalled();
       expect(document.getElementById('goto-input')).toBeTruthy();
-      expect((document.getElementById('goto-error') as HTMLElement).style.display).toBe('none');
+      expect((document.getElementById('goto-error') as HTMLElement).hidden).toBe(true);
     });
 
     it('点击对话框内容区或输入框不关闭，只有点击遮罩层才关闭', () => {
@@ -779,21 +866,27 @@ describe('dialogs', () => {
       showDateRangeDialog(vi.fn());
 
       const overlay = getOverlay();
+      const panel = expectDialogShell(overlay);
       const from = overlay.querySelector('#daterange-from') as HTMLInputElement;
       const to = overlay.querySelector('#daterange-to') as HTMLInputElement;
       expect(from).toBeTruthy();
       expect(from.type).toBe('date');
       expect(to).toBeTruthy();
       expect(to.type).toBe('date');
+      expect(from.classList.contains('gm-input')).toBe(true);
+      expect(to.classList.contains('gm-input')).toBe(true);
       expect(overlay.textContent).toContain('开始日期'); // filter.dateFrom（zh-CN）
       expect(overlay.textContent).toContain('结束日期'); // filter.dateTo（zh-CN）
       expect(overlay.querySelector('#daterange-ok')!.textContent).toBe('确定');
       expect(overlay.querySelector('#daterange-clear')!.textContent).toBe('清除');
       expect(overlay.querySelector('#daterange-cancel')!.textContent).toBe('取消');
+      expectButtonVariant('daterange-ok', 'primary');
+      expectButtonVariant('daterange-clear', 'neutral');
+      expectButtonVariant('daterange-cancel', 'neutral');
 
       // 标题渲染 filter.date（zh-CN），与下方"开始日期/结束日期"标签区分
-      const panel = overlay.firstElementChild as HTMLElement;
       expect((panel.children[0] as HTMLElement).textContent).toBe('日期');
+      expect(panel.querySelectorAll('.gm-dialog__field').length).toBe(2);
     });
 
     it('填写起止日期点确定应以原顺序回调并关闭', () => {
@@ -933,15 +1026,24 @@ describe('dialogs', () => {
       const input = overlay.querySelector('#pathfilter-input') as HTMLTextAreaElement;
       expect(input.tagName).toBe('TEXTAREA');
       expect(input.placeholder).toBe('src/ 或 packages/core');
+      expect(input.classList.contains('gm-textarea')).toBe(true);
       expect(overlay.textContent).toContain('路径'); // filter.path（zh-CN）
       expect(overlay.querySelector('#pathfilter-ok')!.textContent).toBe('确定');
       expect(overlay.querySelector('#pathfilter-clear')!.textContent).toBe('清除');
       expect(overlay.querySelector('#pathfilter-cancel')!.textContent).toBe('取消');
+      expectButtonVariant('pathfilter-ok', 'primary');
+      expectButtonVariant('pathfilter-clear', 'neutral');
+      expectButtonVariant('pathfilter-cancel', 'neutral');
 
       // 标题与编辑标签分别渲染 filter.path / filter.editPaths（zh-CN）
-      const panel = overlay.firstElementChild as HTMLElement;
+      const panel = expectDialogShell(overlay, { wide: true });
       expect((panel.children[0] as HTMLElement).textContent).toBe('路径');
       expect((panel.children[1] as HTMLElement).textContent).toBe('编辑路径…');
+      expect((panel.children[1] as HTMLElement).classList.contains('gm-dialog__label')).toBe(true);
+      // 超限提示是作者类错误提示，初始隐藏
+      const hint = panel.querySelector('#pathfilter-hint') as HTMLElement;
+      expect(hint.classList.contains('gm-dialog__error')).toBe(true);
+      expectHidden('pathfilter-hint', true);
     });
 
     it('应以 selected 预填多行内容（每行一个路径）', () => {
@@ -995,7 +1097,7 @@ describe('dialogs', () => {
       (document.getElementById('pathfilter-ok') as HTMLElement).click();
 
       const hint = document.getElementById('pathfilter-hint') as HTMLElement;
-      expect(hint.style.display).toBe('block');
+      expect(hint.hidden).toBe(false);
       expect(hint.textContent).toBe('最多可选 100 项'); // filter.maxPaths（zh-CN）
       expect(onApply).not.toHaveBeenCalled();
       expect(document.getElementById('pathfilter-input')).toBeTruthy(); // 保持打开
@@ -1011,7 +1113,7 @@ describe('dialogs', () => {
       // 修改输入后提示应清除（文案一并清空，不只隐藏），缩减到 100 项内可正常确定
       input.value = 'src/';
       input.dispatchEvent(new Event('input', { bubbles: true }));
-      expect(hint.style.display).toBe('none');
+      expect(hint.hidden).toBe(true);
       expect(hint.textContent).toBe('');
       (document.getElementById('pathfilter-ok') as HTMLElement).click();
       expect(onApply).toHaveBeenCalledWith(['src/']);
@@ -1066,7 +1168,7 @@ describe('dialogs', () => {
       const input = document.getElementById('pathfilter-input') as HTMLTextAreaElement;
       input.value = hundred.join('\n');
       // 恰好 100 项（未超上限）：点确定前不应出现超限提示
-      expect((document.getElementById('pathfilter-hint') as HTMLElement).style.display).toBe('none');
+      expect((document.getElementById('pathfilter-hint') as HTMLElement).hidden).toBe(true);
       (document.getElementById('pathfilter-ok') as HTMLElement).click();
 
       expect(onApply).toHaveBeenCalledTimes(1);
@@ -1156,6 +1258,15 @@ describe('dialogs', () => {
       expect(mock.listFiles).toHaveBeenCalledTimes(1);
       expect(mock.listFiles).toHaveBeenCalledWith(DIRECTORY);
 
+      const overlay = getOverlay();
+      const panel = expectDialogShell(overlay, { wide: true });
+      expect((overlay.querySelector('#pathtree-list') as HTMLElement).classList.contains('gm-tree'))
+        .toBe(true);
+      expectButtonVariant('pathtree-ok', 'primary');
+      expectButtonVariant('pathtree-clear', 'neutral');
+      expectButtonVariant('pathtree-cancel', 'neutral');
+      expect(panel.querySelector('#pathtree-hint')).toBeTruthy();
+
       await waitForTree();
 
       // 顶层目录默认展开：docs/readme.md 与 src/util 可见，深层 util 子项折叠
@@ -1180,12 +1291,19 @@ describe('dialogs', () => {
       expect(document.getElementById('pathtree-clear')!.textContent).toBe('清除');
       expect(document.getElementById('pathtree-cancel')!.textContent).toBe('取消');
 
-      // 层级缩进与箭头列宽是行样式契约：根 6px、子层 6+14=20px、箭头列固定 12px
+      // 层级缩进与箭头列宽属于作者样式契约：行带 gm-tree-row，箭头带 gm-tree-toggle
+      expect(rowByPath('docs').classList.contains('gm-tree-row')).toBe(true);
+      const toggle = rowByPath('docs').querySelector<HTMLElement>('.pathtree-toggle')!;
+      expect(toggle.classList.contains('gm-tree-toggle')).toBe(true);
+      expect(toggle.classList.contains('pathtree-toggle')).toBe(true); // 旧类名保留给既有查询
+
+      // 缩进由 depth 计算（数据值，保留内联）：根 6px、子层 6+14=20px
       expect(rowByPath('docs').style.paddingLeft).toBe('6px');
       expect(rowByPath('docs/readme.md').style.paddingLeft).toBe('20px');
-      expect(rowByPath('docs').querySelector<HTMLElement>('.pathtree-toggle')!.style.width).toBe('12px');
 
       // 行必须渲染路径名标签
+      expect(rowByPath('package.json').querySelector('.gm-tree-label__text')?.textContent)
+        .toBe('package.json');
       expect(rowByPath('package.json').textContent).toContain('package.json');
     });
 
@@ -1290,7 +1408,7 @@ describe('dialogs', () => {
       clickNode('src/extra.ts'); // 100 + 1 → 超限
 
       const hint = document.getElementById('pathtree-hint') as HTMLElement;
-      expect(hint.style.display).toBe('block');
+      expect(hint.hidden).toBe(false);
       expect(hint.textContent).toBe('最多可选 100 项'); // filter.maxPaths（zh-CN）
       expect(isChecked('src/extra.ts')).toBe(false); // 本次点击已回滚
 
@@ -1380,8 +1498,9 @@ describe('dialogs', () => {
       });
       expect(rows().length).toBe(0);
       expect((document.getElementById('pathtree-ok') as HTMLButtonElement).disabled).toBe(true);
-      // 占位文案保留内联字号（可读性契约）
-      expect((document.getElementById('pathtree-empty') as HTMLElement).style.fontSize).toBe('12px');
+      // 占位文案用作者类渲染（字号/颜色来自 styles.css）
+      expect((document.getElementById('pathtree-empty') as HTMLElement).classList.contains('gm-dialog__hint'))
+        .toBe(true);
     });
 
     it('拉取失败应在容器内显示错误文案并输出 [dialog] 结构化错误日志', async () => {
@@ -1401,8 +1520,9 @@ describe('dialogs', () => {
         .find(p => p.event === 'list_files_error');
       expect(log).toMatchObject({ prefix: '[dialog]', event: 'list_files_error' });
       expect((document.getElementById('pathtree-ok') as HTMLButtonElement).disabled).toBe(true);
-      // 错误文案保留内联字号（可见性契约）
-      expect((document.getElementById('pathtree-error') as HTMLElement).style.fontSize).toBe('12px');
+      // 错误文案用作者类渲染（颜色/字号来自 styles.css）
+      expect((document.getElementById('pathtree-error') as HTMLElement).classList.contains('gm-dialog__error'))
+        .toBe(true);
     });
 
     it('确定与清除后对话框都应关闭', async () => {
@@ -1570,7 +1690,7 @@ describe('dialogs', () => {
       clickNode('src/extra.ts'); // 99 + 1 = 100，未超限
       const hint = document.getElementById('pathtree-hint') as HTMLElement;
       expect(isChecked('src/extra.ts')).toBe(true);
-      expect(hint.style.display).toBe('none');
+      expect(hint.hidden).toBe(true);
 
       (document.getElementById('pathtree-ok') as HTMLElement).click();
       expect(onApply).toHaveBeenCalledWith([...files99, 'src/extra.ts']);
@@ -1584,10 +1704,10 @@ describe('dialogs', () => {
 
       clickNode('src/extra.ts'); // 超限 → 显示提示并回滚
       const hint = document.getElementById('pathtree-hint') as HTMLElement;
-      expect(hint.style.display).toBe('block');
+      expect(hint.hidden).toBe(false);
 
       clickNode('src/f000.ts'); // 取消一个已勾项（99 ≤ 100）→ 提示应隐藏且文案清空
-      expect(hint.style.display).toBe('none');
+      expect(hint.hidden).toBe(true);
       expect(hint.textContent).toBe('');
     });
 
@@ -1709,14 +1829,19 @@ describe('dialogs', () => {
       showDeleteBranchDialog('dev', vi.fn(async () => {}));
 
       const overlay = getOverlay();
+      const panel = expectDialogShell(overlay, { wide: true });
       expect(messageEl().textContent).toBe('分支 dev 尚未合并到当前分支，强制删除将丢失其上的提交。');
+      expect(messageEl().classList.contains('gm-dialog__message')).toBe(true);
       expect(okButton().textContent).toBe('强制删除');
+      expectButtonVariant('delete-branch-ok', 'primary');
+      expectButtonVariant('delete-branch-cancel', 'neutral');
       expect(overlay.querySelector('#delete-branch-cancel')).toBeTruthy();
-      // 错误区初始隐藏
-      expect(errorEl().style.display).toBe('none');
+      // 错误区初始隐藏（author class + hidden 属性）
+      expect(errorEl().classList.contains('gm-dialog__error')).toBe(true);
+      expect(errorEl().hidden).toBe(true);
 
       // 点击内容区不关闭，点击遮罩层才关闭
-      clickOverlay(overlay.firstElementChild as HTMLElement);
+      clickOverlay(panel);
       expect(document.getElementById('delete-branch-ok')).toBeTruthy();
       clickOverlay(overlay);
       expect(document.getElementById('delete-branch-ok')).toBeNull();
@@ -1761,7 +1886,7 @@ describe('dialogs', () => {
       showDeleteBranchDialog('dev', onConfirm);
 
       okButton().click();
-      await vi.waitFor(() => expect(errorEl().style.display).toBe('block'));
+      await vi.waitFor(() => expect(errorEl().hidden).toBe(false));
 
       expect(errorEl().textContent).toBe("删除分支失败: error: cannot delete branch 'dev'");
       expect(document.getElementById('delete-branch-ok')).toBeTruthy(); // 保持打开
@@ -1781,7 +1906,7 @@ describe('dialogs', () => {
 
       okButton().click();
       await vi.waitFor(() => {
-        expect(errorEl().style.display).toBe('block');
+        expect(errorEl().hidden).toBe(false);
       });
 
       expect(errorEl().textContent).toBe('分支 dev 不存在');
@@ -1797,7 +1922,7 @@ describe('dialogs', () => {
       showDeleteBranchDialog('dev', onConfirm);
 
       okButton().click();
-      await vi.waitFor(() => expect(errorEl().style.display).toBe('block'));
+      await vi.waitFor(() => expect(errorEl().hidden).toBe(false));
 
       expect(errorEl().textContent).toBe('网络连接中断');
       expect(document.getElementById('delete-branch-ok')).toBeTruthy();
@@ -1811,7 +1936,7 @@ describe('dialogs', () => {
       showDeleteBranchDialog('dev', onConfirm);
 
       okButton().click();
-      await vi.waitFor(() => expect(errorEl().style.display).toBe('block'));
+      await vi.waitFor(() => expect(errorEl().hidden).toBe(false));
 
       const payloads = debugSpy.mock.calls
         .map(c => String(c[0]))
@@ -1858,6 +1983,87 @@ describe('dialogs', () => {
       expect(document.getElementById('delete-branch-ok')).toBeNull();
       expect(removeSpy.mock.calls.filter(c => c[0] === 'keydown')).toHaveLength(1);
       expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+    });
+  });
+
+  describe('showConfirmDialog', () => {
+    it('应渲染文案与按钮：确定是主操作、取消是中性按钮', () => {
+      showConfirmDialog('确定要丢弃改动吗？', vi.fn());
+
+      const overlay = getOverlay();
+      const panel = expectDialogShell(overlay, { wide: true });
+      expect((panel.querySelector('#confirm-message') as HTMLElement).textContent)
+        .toBe('确定要丢弃改动吗？');
+      expectButtonVariant('confirm-ok', 'primary');
+      expectButtonVariant('confirm-cancel', 'neutral');
+    });
+
+    it('危险操作时确定按钮改用危险样式类', () => {
+      showConfirmDialog('确定要删除吗？', vi.fn(), true);
+
+      expectButtonVariant('confirm-ok', 'destructive');
+      expectButtonVariant('confirm-cancel', 'neutral');
+    });
+
+    it('点确定应先关闭对话框再回调，点取消只关闭', () => {
+      const onConfirm = vi.fn();
+      showConfirmDialog('继续？', onConfirm);
+
+      (document.getElementById('confirm-cancel') as HTMLElement).click();
+      expect(document.getElementById('confirm-ok')).toBeNull();
+      expect(onConfirm).not.toHaveBeenCalled();
+
+      showConfirmDialog('继续？', onConfirm);
+      (document.getElementById('confirm-ok') as HTMLElement).click();
+      expect(document.getElementById('confirm-ok')).toBeNull();
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('showPromptDialog', () => {
+    it('每个字段应渲染标签与输入框，确定时按字段顺序回调去除首尾空白后的值', () => {
+      const onConfirm = vi.fn();
+      showPromptDialog('添加工作树', [
+        { label: '路径', value: ' /repo/wt ' },
+        { label: '分支', placeholder: 'feature-x' },
+      ], onConfirm);
+
+      const overlay = getOverlay();
+      const panel = expectDialogShell(overlay, { wide: true });
+      expect((panel.querySelector('#prompt-title') as HTMLElement).textContent).toBe('添加工作树');
+
+      const labels = [...panel.querySelectorAll('#prompt-fields .gm-dialog__label')];
+      expect(labels.map(l => l.textContent)).toEqual(['路径', '分支']);
+      const inputs = [...panel.querySelectorAll<HTMLInputElement>('#prompt-fields input')];
+      expect(inputs.length).toBe(2);
+      expect(inputs.every(i => i.classList.contains('gm-input'))).toBe(true);
+      expect(inputs[1].placeholder).toBe('feature-x');
+      // 字段各自包在 gm-dialog__field 里
+      expect(panel.querySelectorAll('#prompt-fields .gm-dialog__field').length).toBe(2);
+      expectButtonVariant('prompt-ok', 'primary');
+      expectButtonVariant('prompt-cancel', 'neutral');
+
+      inputs[1].value = 'feature-x';
+      (document.getElementById('prompt-ok') as HTMLElement).click();
+
+      expect(onConfirm).toHaveBeenCalledWith(['/repo/wt', 'feature-x']);
+      expect(document.getElementById('prompt-ok')).toBeNull();
+    });
+
+    it('按回车应提交，点取消应关闭且不回调', () => {
+      const onConfirm = vi.fn();
+      showPromptDialog('重命名', [{ label: '名称', value: 'a' }], onConfirm);
+
+      // 输入框的 keydown 冒泡到遮罩层，由遮罩层统一处理 Enter
+      (document.querySelector('#prompt-fields input') as HTMLInputElement)
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(onConfirm).toHaveBeenCalledWith(['a']);
+      expect(document.getElementById('prompt-ok')).toBeNull();
+
+      showPromptDialog('重命名', [{ label: '名称', value: 'b' }], onConfirm);
+      (document.getElementById('prompt-cancel') as HTMLElement).click();
+      expect(document.getElementById('prompt-ok')).toBeNull();
+      expect(onConfirm).toHaveBeenCalledTimes(1);
     });
   });
 });

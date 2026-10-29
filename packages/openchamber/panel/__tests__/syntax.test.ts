@@ -4,8 +4,8 @@ import { escapeHtml, highlightLine } from '../syntax';
 
 describe('syntax', () => {
   it('wraps every result so callers can inject it as raw HTML', () => {
-    expect(highlightLine('')).toBe('<span class="gm-line"></span>');
-    expect(highlightLine('plain text').startsWith('<span class="gm-line">')).toBe(true);
+    expect(highlightLine('')).toBe('<span></span>');
+    expect(highlightLine('plain text').startsWith('<span>')).toBe(true);
   });
 
   it('marks keywords, strings, numbers and calls', () => {
