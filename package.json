@@ -1,6 +1,6 @@
 {
   "name": "git-manage",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "description": "Git management tool for OpenChamber and VSCode",
   "license": "Apache-2.0",

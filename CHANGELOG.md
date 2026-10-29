@@ -2,6 +2,18 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式约定，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。本文件基于本仓库提交历史整理。
 
+## [0.0.6] - 2026-10-29
+
+### Changed
+
+- Panel appearance now follows the host theme: colours, fonts and radii come from the `--oc-*` tokens the host writes on `ready`, so light and dark both work without a rebuild
+- Controls, dialogs, menus and the bottom panels draw from the SDK UI kit and one authored stylesheet; the 40px icon rail is gone and its actions moved into the branch header and the commit toolbar
+- Diff lines are syntax highlighted from the host's `--syntax-*` tokens
+
+### Fixed
+
+- The panel no longer paints a dark surface inside a light theme, and no longer overrides the host's overlay scrollbars
+
 ## [0.0.5] - 2026-10-28
 
 ### 工程化
