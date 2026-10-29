@@ -2,6 +2,17 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式约定，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。本文件基于本仓库提交历史整理。
 
+## [0.0.7] - 2026-10-29
+
+### Added
+
+- Every pane boundary is now a draggable divider: branch column, details column, changed files vs diff preview, changed files vs commit details, and the bottom panel
+- Divider sizes are clamped to the open panel, adjustable from the keyboard and remembered across reloads through host extension storage
+
+### Fixed
+
+- The bottom Console/Worktrees panel keeps its configured height instead of being squeezed by the main shell when it opens
+
 ## [0.0.6] - 2026-10-29
 
 ### Changed
