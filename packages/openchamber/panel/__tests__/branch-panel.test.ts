@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createBranchPanel } from '../components/branch-panel';
+import type { BranchActions } from '../components/branch-panel';
 import { showContextMenu } from '../components/context-menu';
 import { createInitialState, getState, setState, stateManager, Branch } from '../state';
 import { ServiceClient } from '../service';
@@ -86,14 +87,25 @@ describe('branch-panel', () => {
    */
   function createPanel(
     onBranchSelect: ReturnType<typeof vi.fn> = vi.fn(),
-    onSelectionCleared: ReturnType<typeof vi.fn> = vi.fn()
+    onSelectionCleared: ReturnType<typeof vi.fn> = vi.fn(),
+    actions: Partial<BranchActions> = {}
   ) {
     const panel = createBranchPanel(
       container,
       createServiceMock(),
       '/repo',
       onBranchSelect,
-      onSelectionCleared
+      onSelectionCleared,
+      {
+        onNewBranch: vi.fn(),
+        onUpdateSelected: vi.fn(),
+        onFetch: vi.fn(),
+        onDeleteBranch: vi.fn(),
+        onCompareBranch: vi.fn(),
+        onToggleMyBranches: vi.fn(),
+        onFavorite: vi.fn(),
+        ...actions,
+      }
     );
     dispose = panel.dispose;
     return panel;
@@ -312,20 +324,22 @@ describe('branch-panel', () => {
     expect(branchItem('develop')).toBeTruthy();
   });
 
-  it('当前分支与选中分支应该有不同背景高亮', () => {
+  it('当前分支与选中分支的状态应可区分（颜色由宿主样式决定）', () => {
     setState(s => { s.branches = makeBranches(); });
     createPanel();
 
-    // 当前分支（HEAD）默认高亮 #2a3a4a
-    expect(branchItem('main').style.backgroundColor).toBe('rgb(42, 58, 74)');
-    // 普通分支无背景
-    expect(branchItem('develop').style.backgroundColor).not.toBe('rgb(42, 58, 74)');
-    expect(branchItem('develop').style.backgroundColor).not.toBe('rgb(46, 74, 110)');
+    // The current branch is marked by data-current, painted by styles.css.
+    expect(branchItem('main').dataset.current).toBe('true');
+    expect(branchItem('develop').dataset.current).toBe('false');
+    // Nothing is selected before a click.
+    expect(branchItem('develop').getAttribute('aria-selected')).toBe('false');
+    expect(branchItem('main').getAttribute('aria-selected')).toBe('false');
 
-    // 点击选中 develop → 选中高亮 #2e4a6e，main 保持当前分支高亮
+    // Clicking develop selects it; main stays the current branch but is not selected.
     branchItem('develop').click();
-    expect(branchItem('develop').style.backgroundColor).toBe('rgb(46, 74, 110)');
-    expect(branchItem('main').style.backgroundColor).toBe('rgb(42, 58, 74)');
+    expect(branchItem('develop').getAttribute('aria-selected')).toBe('true');
+    expect(branchItem('main').getAttribute('aria-selected')).toBe('false');
+    expect(branchItem('main').dataset.current).toBe('true');
   });
 
   it('state.branches 变化应该通过订阅局部更新列表而不重建搜索框', () => {
@@ -356,17 +370,19 @@ describe('branch-panel', () => {
     expect(branchItem('main')).toBeTruthy();
   });
 
-  it('创建面板前容器中的旧内容应该被清空（首个子节点为搜索框元素）', () => {
+  it('创建面板前容器中的旧内容应该被清空（依次为头部、搜索行、列表）', () => {
     container.innerHTML = '<p>旧内容</p>';
     setState(s => { s.branches = makeBranches(); });
     createPanel();
 
-    // innerHTML 置空后再追加搜索框：首子节点必须是元素节点，而非残留文本
     expect(container.firstChild?.nodeType).toBe(Node.ELEMENT_NODE);
     expect(container.textContent).not.toContain('旧内容');
-    expect(
-      container.firstElementChild?.querySelector(`input[placeholder="${t('branch.searchPlaceholder')}"]`)
-    ).toBeTruthy();
+    // Header (title + actions), then the search row, then the tree.
+    const [header, searchRow, list] = Array.from(container.children) as HTMLElement[];
+    expect(header.querySelector('.gm-branches__title')?.textContent).toBe(t('branch.title'));
+    expect(header.querySelectorAll('[data-branch-action]').length).toBe(8);
+    expect(searchRow.querySelector(`input[placeholder="${t('branch.searchPlaceholder')}"]`)).toBeTruthy();
+    expect(list.hasAttribute('data-branch-list')).toBe(true);
   });
 
   it('点击列表空白区域应该既不抛错也不触发重渲染', () => {
@@ -681,11 +697,11 @@ describe('branch-panel', () => {
     expect(groupHeader('feature').querySelector('span')?.textContent).toBe('▶');
     expect(branchItem('feature/login')).toBeFalsy();
 
-    // 展开：箭头朝下，分支项带 32px 缩进
+    // 展开：箭头朝下，分支项带嵌套缩进（由 gm-branch-item--nested 承担）
     groupHeader('feature').click();
     expect(groupHeader('feature').querySelector('span')?.textContent).toBe('▼');
     expect(branchItem('feature/login')).toBeTruthy();
-    expect(branchItem('feature/login').style.paddingLeft).toBe('32px');
+    expect(branchItem('feature/login').classList.contains('gm-branch-item--nested')).toBe(true);
 
     // 再次折叠：箭头回到朝右
     groupHeader('feature').click();
@@ -736,15 +752,13 @@ describe('branch-panel', () => {
     const nameSpan = (item: HTMLElement, name: string) =>
       Array.from(item.querySelectorAll('span')).find(s => s.textContent === name) as HTMLElement;
 
-    // 当前分支名称加粗
-    expect(nameSpan(main, 'main').style.fontWeight).toBe('bold');
-    // 普通分支名称有颜色
-    expect(nameSpan(develop, 'develop').style.color).not.toBe('');
-
-    // 普通分支 bgStyle 为空串：style 属性恰好等于布局样式，不含额外背景声明
-    expect(develop.getAttribute('style')?.trimEnd()).toBe(
-      'display: flex; align-items: center; padding: 3px 8px 3px 20px; cursor: pointer; font-size: 12px;'
-    );
+    // 当前分支由 data-current 标记（加粗由 styles.css 承担）
+    expect(main.dataset.current).toBe('true');
+    expect(develop.dataset.current).toBe('false');
+    expect(nameSpan(develop, 'develop').textContent).toBe('develop');
+    // 外观完全交给样式表：分支项不再携带内联 style
+    expect(develop.getAttribute('style')).toBeNull();
+    expect(develop.classList.contains('gm-branch-item')).toBe(true);
   });
 
   it('按未推送/未拉取状态渲染上下箭头徽标', () => {
@@ -833,9 +847,10 @@ describe('branch-panel', () => {
     const input = container.querySelector(`input[placeholder="${t('branch.searchPlaceholder')}"]`) as HTMLInputElement;
     const iconBox = input.parentElement as HTMLElement;
 
-    // 图标 SVG 挂在输入框左侧的 span 内；图标名取错或返回空串都会导致 svg 缺失
+    // The kit search field draws its own magnifier inside the wrapper.
     expect(iconBox.querySelector('svg')).toBeTruthy();
-    expect(iconBox.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 16 16');
+    expect(iconBox.querySelector('.oc-sdk-search-icon')).toBeTruthy();
+    expect(iconBox.querySelector('svg')?.getAttribute('width')).toBe('16');
   });
 
   it('搜索框 placeholder 应随 locale 切换（zh-CN 分支或标签 / en Branch or tag）', () => {
@@ -944,7 +959,7 @@ describe('branch-panel', () => {
     ]);
 
     expect(branchItem('a/b/c')).toBeTruthy();
-    expect(branchItem('a/b/c').style.paddingLeft).toBe('32px');
+    expect(branchItem('a/b/c').classList.contains('gm-branch-item--nested')).toBe(true);
   });
 
   it('expandAll 后再点击单个分组只应折叠该分组，其余分组保持展开', () => {
@@ -1032,7 +1047,7 @@ describe('branch-panel', () => {
     groupHeader('feat').click();
     expect(branchItem('feat/x')).toBeTruthy();
     expect(branchItem('feat/y')).toBeTruthy();
-    expect(branchItem('feat/x').style.paddingLeft).toBe('32px');
+    expect(branchItem('feat/x').classList.contains('gm-branch-item--nested')).toBe(true);
     // 展开文件夹不影响根分支渲染
     expect(branchItem('root-a')).toBeTruthy();
   });

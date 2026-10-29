@@ -120,8 +120,8 @@ textarea {
 }
 
 .gm-branches {
-  width: 220px;
-  min-width: 220px;
+  width: 260px;
+  min-width: 260px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -391,3 +391,231 @@ textarea {
 
 /* Scrollbars are the host's: it injects GUEST_SCROLLBAR_CSS (overlay, hidden
  * at rest) into every served document, so the panel must not style them. */
+
+/* ---------------------------------------------------------------------------
+ * Branch panel
+ * Header carries the branch actions that used to live in the icon rail; the
+ * search row carries the "my branches" toggle.
+ * ------------------------------------------------------------------------- */
+.gm-branches[hidden] {
+  display: none;
+}
+
+/* Eight header actions plus a title have to fit 260px: 22px buttons. */
+.gm-branches__header .gm-icon-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.gm-branches__header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 10px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.gm-branches__title {
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+}
+
+.gm-branches__search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.gm-branches__search > .oc-sdk-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Density override: the kit ships 32px fields, the tree needs a 24px row. */
+.gm-branches__search .oc-sdk-input,
+.gm-toolbar .oc-sdk-input {
+  height: 24px;
+  padding-left: 26px;
+  padding-right: 24px;
+  font-size: 12px;
+}
+
+.gm-branches__search .oc-sdk-search-icon,
+.gm-toolbar .oc-sdk-search-icon {
+  left: 8px;
+}
+
+.gm-branches__search .oc-sdk-search-clear,
+.gm-toolbar .oc-sdk-search-clear {
+  right: 2px;
+  width: 20px;
+  height: 20px;
+}
+
+.gm-branches__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 0 6px;
+}
+
+.gm-branch-group {
+  margin-bottom: 2px;
+}
+
+.gm-branch-group--nested {
+  margin-left: 12px;
+}
+
+.gm-branch-group__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--oc-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.gm-branch-group__header:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-branch-group__caret {
+  width: 8px;
+  font-size: 8px;
+  flex: 0 0 auto;
+}
+
+.gm-branch-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 20px;
+  font-size: 12px;
+  color: var(--oc-fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.gm-branch-item--nested {
+  padding-left: 32px;
+}
+
+.gm-branch-item:hover {
+  background: var(--oc-hover);
+}
+
+.gm-branch-item[data-current="true"] {
+  font-weight: 600;
+}
+
+.gm-branch-item[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-branch-item__icon,
+.gm-branch-item__favorite {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--oc-muted);
+}
+
+.gm-branch-item__favorite {
+  color: var(--oc-warning);
+}
+
+.gm-branch-item__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-branch-item__count {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gm-branch-item__count--unpushed {
+  color: var(--oc-success);
+}
+
+.gm-branch-item__count--unpulled {
+  color: var(--oc-primary);
+}
+
+/* ---------------------------------------------------------------------------
+ * Commit toolbar
+ * ------------------------------------------------------------------------- */
+.gm-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.gm-toolbar__search {
+  flex: 0 1 280px;
+  min-width: 120px;
+}
+
+.gm-toolbar__divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--oc-border);
+}
+
+.gm-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--oc-radius) - 3px);
+  background: transparent;
+  color: var(--oc-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.gm-filter-btn:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-filter-btn[aria-pressed="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-filter-btn:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}

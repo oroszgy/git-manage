@@ -11,6 +11,9 @@
  */
 
 import { html } from '../html';
+import { mountSearchField } from '@openchamber/sdk/ui';
+import type { SearchFieldHandle } from '@openchamber/sdk/ui';
+
 import {
   getState,
   setState,
@@ -30,11 +33,20 @@ import type { DropdownMenuItem } from './dropdown-menu';
 import { host } from '../host';
 import { showOperationError } from './errors';
 
+/** Toolbar hooks owned by main: the rail no longer exists, so these live here. */
+export interface CommitListActions {
+  /** Show/hide the branch panel (the chevron at the left of the toolbar). */
+  onToggleBranchPanel?: () => void;
+  /** Filter the log to the selected branch ("locate in log"). */
+  onLocateBranch?: () => void;
+}
+
 export function createCommitListPanel(
   container: HTMLElement,
   service: ServiceClient,
   directory: string,
-  onCommitSelect: (commit: CommitInfo) => void
+  onCommitSelect: (commit: CommitInfo) => void,
+  actions: CommitListActions = {},
 ): { dispose: () => void } {
   let disposed = false;
   let listContainer: HTMLElement | null = null;
@@ -43,6 +55,7 @@ export function createCommitListPanel(
   let unsubscribe: (() => void) | null = null;
   /** displaySettings 按值比较的订阅（settings-menu 原地改对象，引用不变） */
   let unsubscribeDisplay: (() => void) | null = null;
+  let searchHandle: SearchFieldHandle | null = null;
   /** Shift 范围选锚点（组件内 UI 状态，不入全局 store） */
   let lastClickIndex: number | null = null;
   /** 工具栏 6 个过滤按钮引用缓存（toolbar 构建时写入，供激活态刷新复用，避免重复查询 DOM） */
@@ -168,56 +181,71 @@ export function createCommitListPanel(
     ];
     for (const [btn, active] of activeFlags) {
       if (!btn) continue;
-      btn.style.background = active ? '#1a3a5a' : '#333';
-      btn.style.border = active ? '1px solid #2a5a8a' : '1px solid #444';
-      btn.style.color = active ? '#cfe8ff' : '#888';
+      // Purely presentational: styles.css paints [aria-pressed="true"].
+      btn.setAttribute('aria-pressed', String(active));
     }
+  };
+
+  /** Keep the branch-panel chevron in step with the panel's visibility. */
+  const syncBranchToggle = (): void => {
+    const btn = toolbar?.querySelector<HTMLElement>('[data-action="btn-toggle-branches"]');
+    if (!btn) return;
+    const hidden = getState().branchPanelHidden;
+    const title = hidden ? t('sidebar.showBranches') : t('sidebar.hideBranches');
+    btn.setAttribute('title', title);
+    btn.setAttribute('aria-label', title);
+    btn.innerHTML = hidden ? getIcon('showBranches') : getIcon('hideBranches');
   };
 
   const render = () => {
     if (disposed) return;
     container.innerHTML = '';
 
-    // 搜索过滤工具栏 (IntelliJ 完整风格)
+    // Search and filter toolbar (IntelliJ layout: search, toggles, filters, actions)
     toolbar = html`
-      <div style="display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-bottom: 1px solid #333; flex-shrink: 0; background: #1e1e1e; flex-wrap: wrap;">
-        <!-- 搜索输入框 -->
-        <div style="display: flex; align-items: center; background: #2a2a2a; border: 1px solid #444; border-radius: 3px; padding: 0 6px; width: 280px; max-width: 280px; flex: 0 1 280px; min-width: 120px;">
-          <span style="color: #888; font-size: 12px; margin-right: 4px;">${getIcon('search')}</span>
-          <input 
-            type="text" 
-            placeholder="${t('commit.searchPlaceholder')}" 
-            data-search-input
-            style="flex: 1; padding: 3px 0; background: transparent; border: none; color: #ccc; font-size: 12px; outline: none; min-width: 80px;"
-          />
-        </div>
-        <!-- 正则/大小写按钮 -->
-        <button data-action="btn-regex" style="padding: 2px 5px; background: #333; border: 1px solid #444; border-radius: 3px; color: #888; cursor: pointer; font-size: 11px; font-family: monospace;" title="${t('filter.regex')}">.*</button>
-        <button data-action="btn-case" style="padding: 2px 5px; background: #333; border: 1px solid #444; border-radius: 3px; color: #888; cursor: pointer; font-size: 11px; font-weight: bold;" title="${t('filter.case')}">Cc</button>
-        <!-- 分隔线 -->
-        <div style="width: 1px; height: 16px; background: #444; margin: 0 3px;"></div>
-        <!-- 过滤下拉按钮 -->
-        <button data-action="btn-filter-branch" style="padding: 2px 6px; background: #333; border: 1px solid #444; border-radius: 3px; color: #888; cursor: pointer; font-size: 11px; white-space: nowrap;">${t('filter.branch')} ▾</button>
-        <button data-action="btn-filter-user" style="padding: 2px 6px; background: #333; border: 1px solid #444; border-radius: 3px; color: #888; cursor: pointer; font-size: 11px; white-space: nowrap;">${t('filter.user')} ▾</button>
-        <button data-action="btn-filter-date" style="padding: 2px 6px; background: #333; border: 1px solid #444; border-radius: 3px; color: #888; cursor: pointer; font-size: 11px; white-space: nowrap;">${t('filter.date')} ▾</button>
-        <button data-action="btn-filter-path" style="padding: 2px 6px; background: #333; border: 1px solid #444; border-radius: 3px; color: #888; cursor: pointer; font-size: 11px; white-space: nowrap;">${t('filter.path')} ▾</button>
-        <!-- 分隔线 -->
-        <div style="width: 1px; height: 16px; background: #444; margin: 0 3px;"></div>
-        <!-- 右侧角：刷新 / Cherry-pick / 视图选项 / 搜索 -->
-        <button data-action="btn-refresh" style="padding: 2px 5px; background: transparent; border: none; border-radius: 3px; color: #888; cursor: pointer;" title="${t('sidebar.refresh')}">${getIcon('refresh')}</button>
-        <button data-action="btn-cherry-pick" style="padding: 2px 5px; background: transparent; border: none; border-radius: 3px; color: #888; cursor: pointer;" title="${t('commit.cherryPick')}">${getIcon('cherryPick')}</button>
-        <button data-action="btn-settings" style="padding: 2px 5px; background: transparent; border: none; border-radius: 3px; color: #888; cursor: pointer;" title="${t('settings.title')}">${getIcon('gearSettings')}</button>
-        <button data-action="btn-goto" style="padding: 2px 5px; background: transparent; border: none; border-radius: 3px; color: #888; cursor: pointer;" title="${t('goto.title')}">${getIcon('search')}</button>
-      </div>
+      <div class="gm-toolbar"></div>
     `;
 
-    const searchInput = toolbar.querySelector('input') as HTMLInputElement;
-    searchInput.value = getState().commitSearch;
-    searchInput.addEventListener('input', (e) => {
-      const target = e.target as HTMLInputElement;
-      setState(s => { s.commitSearch = target.value; });
-      // 订阅回调会触发 filterCommits，filterCommits 更新 filteredCommits 后再触发 renderList
+    // Leading chevron: the icon rail is gone, so the branch panel is toggled here.
+    const branchHidden = getState().branchPanelHidden;
+    const toggleTitle = branchHidden ? t('sidebar.showBranches') : t('sidebar.hideBranches');
+    const branchToggle = html`
+      <button type="button" class="gm-icon-btn" data-action="btn-toggle-branches" title="${toggleTitle}" aria-label="${toggleTitle}">
+        ${branchHidden ? getIcon('showBranches') : getIcon('hideBranches')}
+      </button>
+    `;
+    toolbar.appendChild(branchToggle);
+
+    const searchWrap = html`
+      <div class="gm-toolbar__search"></div>
+    `;
+    searchHandle = mountSearchField(searchWrap, {
+      value: getState().commitSearch,
+      placeholder: t('commit.searchPlaceholder'),
+      label: t('commit.searchPlaceholder'),
+      onChange: (value) => {
+        setState(s => { s.commitSearch = value; });
+      },
     });
+    // main.ts focuses this contract selector; the kit input does not carry it.
+    searchWrap.querySelector('input')?.setAttribute('data-search-input', '');
+    toolbar.appendChild(searchWrap);
+
+    toolbar.insertAdjacentHTML('beforeend', `
+      <button type="button" class="gm-filter-btn gm-filter-btn--code" data-action="btn-regex" aria-pressed="false" title="${t('filter.regex')}">.*</button>
+      <button type="button" class="gm-filter-btn gm-filter-btn--code" data-action="btn-case" aria-pressed="false" title="${t('filter.case')}">Cc</button>
+      <div class="gm-toolbar__divider"></div>
+      <button type="button" class="gm-filter-btn" data-action="btn-filter-branch" aria-pressed="false">${t('filter.branch')} ▾</button>
+      <button type="button" class="gm-filter-btn" data-action="btn-filter-user" aria-pressed="false">${t('filter.user')} ▾</button>
+      <button type="button" class="gm-filter-btn" data-action="btn-filter-date" aria-pressed="false">${t('filter.date')} ▾</button>
+      <button type="button" class="gm-filter-btn" data-action="btn-filter-path" aria-pressed="false">${t('filter.path')} ▾</button>
+      <div class="gm-toolbar__divider"></div>
+      <button type="button" class="gm-icon-btn" data-action="btn-locate" title="${t('sidebar.locate')}" aria-label="${t('sidebar.locate')}">${getIcon('locate')}</button>
+      <button type="button" class="gm-icon-btn" data-action="btn-refresh" title="${t('sidebar.refresh')}" aria-label="${t('sidebar.refresh')}">${getIcon('refresh')}</button>
+      <button type="button" class="gm-icon-btn" data-action="btn-cherry-pick" title="${t('commit.cherryPick')}" aria-label="${t('commit.cherryPick')}">${getIcon('cherryPick')}</button>
+      <button type="button" class="gm-icon-btn" data-action="btn-settings" title="${t('settings.title')}" aria-label="${t('settings.title')}">${getIcon('gearSettings')}</button>
+      <button type="button" class="gm-icon-btn" data-action="btn-goto" title="${t('goto.title')}" aria-label="${t('goto.title')}">${getIcon('search')}</button>
+    `);
 
     /**
      * Cherry-pick 选中提交到当前分支
@@ -274,6 +302,8 @@ export function createCommitListPanel(
       if (!target) return;
       const action = target.getAttribute('data-action');
       if (action === 'btn-refresh') refreshCommits(service, directory);
+      else if (action === 'btn-toggle-branches') actions.onToggleBranchPanel?.();
+      else if (action === 'btn-locate') actions.onLocateBranch?.();
       else if (action === 'btn-regex') toggleRegex();
       else if (action === 'btn-case') toggleCase();
       else if (action === 'btn-filter-branch') openBranchDropdown(target as HTMLElement);
@@ -301,7 +331,7 @@ export function createCommitListPanel(
 
     // 提交列表
     listContainer = html`
-      <div tabindex="0" style="flex: 1; overflow-y: auto; overflow-x: hidden; user-select: none; outline: none;"></div>
+      <div tabindex="0" class="gm-commit-list"></div>
     `;
 
     // Ctrl/Cmd+A 全选提交（列表获得焦点时生效，对齐 IDEA）
@@ -453,12 +483,17 @@ export function createCommitListPanel(
         'filterPaths',
         'searchRegex',
         'searchCaseSensitive',
+        'branchPanelHidden',
       ],
       (changed) => {
         if (disposed) return;
         console.debug(JSON.stringify({ prefix: '[commit-list]', event: 'sub_changed', changed }));
         // 过滤按钮激活态随关注字段变化刷新（无关字段不进入本回调，不触发重绘）
         updateFilterButtons();
+        if (changed.includes('branchPanelHidden')) syncBranchToggle();
+        if (changed.includes('commitSearch')) {
+          searchHandle?.update({ value: getState().commitSearch });
+        }
         // 搜索模式开关（外部直接 setState 场景）→ 重算过滤；点击按钮场景由 toggle 显式调用，管道幂等
         if (changed.includes('searchRegex') || changed.includes('searchCaseSensitive')) {
           filterCommits();
@@ -802,7 +837,7 @@ export function createCommitListPanel(
 
     const commits = state.filteredCommits;
     if (commits.length === 0) {
-      listContainer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:12px;">${t('commit.empty')}</div>`;
+      listContainer.innerHTML = `<div class="gm-empty">${t('commit.empty')}</div>`;
       return;
     }
 
@@ -837,6 +872,8 @@ export function createCommitListPanel(
       unsubscribeDisplay();
       unsubscribeDisplay = null;
     }
+    searchHandle?.dispose();
+    searchHandle = null;
   };
 
   render();

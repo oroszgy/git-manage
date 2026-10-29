@@ -23,6 +23,7 @@ import { installHostTheme } from './theme';
 import { getState, setState } from './state';
 import { setLocale, t } from './i18n';
 import { createServiceClient } from './service';
+import type { BranchActions } from './components/branch-panel';
 import { deleteBranches, resolveDeleteTargets } from './components/batch-delete';
 import { showOperationError } from './components/errors';
 import {
@@ -32,12 +33,10 @@ import {
   createCommitDetailPanel,
   createConsolePanel,
   createWorktreesPanel,
-  createSidebar,
   hideContextMenu,
   showCompareBranchesView,
 } from './components';
 import { showCreateBranchDialog } from './components/dialogs';
-import { showSettingsMenu } from './components/settings-menu';
 import { filterCommits } from './components/commit-list';
 
 const root = document.querySelector("#root")!;
@@ -123,61 +122,54 @@ async function render(): Promise<void> {
     `;
     mainLayout.appendChild(contentArea);
 
-    // 左侧图标工具栏 (IntelliJ 风格)：先占位保证三栏顺序，handlers 待依赖面板就绪后接线
-    const sidebarHost = html`
-      <div></div>
-    `;
-    contentArea.appendChild(sidebarHost);
-
-    // A 区域: 分支面板 (左侧 220px)
+    // A region: branch panel (left). Its header owns the branch actions that
+    // used to live in the icon rail, so the rail is gone (issue #23).
     const branchPanel = html`
       <div class="gm-branches"></div>
     `;
-    // 会话级保留上次的显隐状态
-    branchPanel.style.display = getState().branchPanelHidden ? 'none' : '';
+    // Session-level visibility, kept across rebuilds.
+    branchPanel.hidden = getState().branchPanelHidden;
     contentArea.appendChild(branchPanel);
 
-    const branchPanelComp = createBranchPanel(
-      branchPanel,
-      service,
-      getDir(),
-      (branch) => {
-        console.debug(JSON.stringify({ prefix: '[main]', event: 'on_branch_select_cb', branchName: branch.name }));
-        loadCommitsForBranch(branch.name);
-      },
-      // 点击分支面板空白区域：取消选中并清除分支过滤，恢复全部提交
-      () => { clearBranchFilter(); }
-    );
-    disposables.push(branchPanelComp);
+    const toggleBranchPanel = (): void => {
+      setState(s => { s.branchPanelHidden = !s.branchPanelHidden; });
+      branchPanel.hidden = getState().branchPanelHidden;
+    };
 
-    // B 区域: 提交列表 (中间 - 占大部分空间)
+    // B region: commit list (middle, takes the remaining width)
     const commitListPanel = html`
       <div class="gm-main"></div>
     `;
     contentArea.appendChild(commitListPanel);
 
-    const commitListComp = createCommitListPanel(commitListPanel, service, getDir(), (commit) => {
-      loadCommitDetail(commit.hash);
-    });
+    const commitListComp = createCommitListPanel(
+      commitListPanel,
+      service,
+      getDir(),
+      (commit) => {
+        loadCommitDetail(commit.hash);
+      },
+      {
+        onToggleBranchPanel: toggleBranchPanel,
+        onLocateBranch: () => { void runSidebarLocateBranch(); },
+      },
+    );
     disposables.push(commitListComp);
 
-    // 左侧图标工具栏：12 个图标全部接线（依赖分支面板、提交列表、分支面板组件）
-    const sidebarComp = createSidebar(sidebarHost, {
-      onToggleBranchPanel: () => {
-        setState(s => { s.branchPanelHidden = !s.branchPanelHidden; });
-        branchPanel.style.display = getState().branchPanelHidden ? 'none' : '';
-      },
+    /** Branch actions rendered in the branch-panel header. */
+    const branchActions: BranchActions = {
       onNewBranch: () => {
         try {
-          // 选中提交时基于该提交建分支（IDEA 语义），否则基于当前 HEAD
+          // A selected commit means "branch from here" (IDEA semantics), otherwise HEAD.
           const selected = getState().selectedCommit?.hash ?? null;
           void service.debugLog('new-branch-dialog-open', { selectedCommit: selected });
-          showCreateBranchDialog({ service, directory: getDir(), startPoint: selected ?? undefined, entry: 'sidebar' });
+          showCreateBranchDialog({ service, directory: getDir(), startPoint: selected ?? undefined, entry: 'branchPanel' });
         } catch (e) {
-          console.error(JSON.stringify({ prefix: '[sidebar]', event: 'new_branch_error', error: String(e) }));
+          console.error(JSON.stringify({ prefix: '[branch-panel]', event: 'new_branch_error', error: String(e) }));
         }
       },
-      onRefresh: () => { void runSidebarUpdate(); },
+      onUpdateSelected: () => { void runSidebarUpdate(); },
+      onFetch: () => { void runSidebarFetch(); },
       onDeleteBranch: () => {
         // 对齐 IDEA DeleteBranchAction：多选时批量删除所有选中分支，未多选时只删单选分支。
         // IDEA 在多选包含当前分支时整体置灰，这里改为明确提示并中止，避免删掉一半才失败
@@ -288,14 +280,22 @@ async function render(): Promise<void> {
         })();
       },
       onToggleMyBranches: () => { void toggleMyBranches(); },
-      onFetch: () => { void runSidebarFetch(); },
       onFavorite: () => { void runSidebarFavorite(); },
-      onLocateBranch: () => { void runSidebarLocateBranch(); },
-      onSettings: (e) => { showSettingsMenu(e); },
-      onExpandAll: () => { branchPanelComp.expandAll(); },
-      onCollapseAll: () => { branchPanelComp.collapseAll(); },
-    });
-    disposables.push(sidebarComp);
+    };
+
+    const branchPanelComp = createBranchPanel(
+      branchPanel,
+      service,
+      getDir(),
+      (branch) => {
+        console.debug(JSON.stringify({ prefix: '[main]', event: 'on_branch_select_cb', branchName: branch.name }));
+        loadCommitsForBranch(branch.name);
+      },
+      // Empty space: clear the selection and the branch filter, restore all commits.
+      () => { clearBranchFilter(); },
+      branchActions,
+    );
+    disposables.push(branchPanelComp);
 
     // C 区域: 右侧详情面板 (固定宽度 300px)
     const detailPanel = html`

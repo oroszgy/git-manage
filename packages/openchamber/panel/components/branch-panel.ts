@@ -1,36 +1,110 @@
 /**
- * 分支面板组件
- * 交互参考 IntelliJ 分支面板
- * 支持树状分组结构
+ * Branch panel.
+ *
+ * A tree of HEAD / local / remote groups, with folder grouping inside "Local".
+ * The header holds the branch actions that used to sit in the icon rail (see
+ * issue #23): the rail is gone, so nothing about branch handling lives outside
+ * this panel any more. The search row keeps the "my branches" toggle, which is
+ * a filter rather than an action.
  */
 
+import { mountSearchField } from '@openchamber/sdk/ui';
+import type { SearchFieldHandle } from '@openchamber/sdk/ui';
+
 import { html } from '../html';
-import { getState, setState, subscribeFields, Branch } from '../state';
+import { getState, setState, subscribeFields, Branch, PanelState } from '../state';
 import { ServiceClient } from '../service';
 import { getIcon } from '../icons';
 import { t } from '../i18n';
 import { showContextMenu } from './context-menu';
 
+/** Branch actions owned by main; the panel only renders and gates them. */
+export interface BranchActions {
+  onNewBranch: () => void;
+  onUpdateSelected: () => void;
+  onFetch: () => void;
+  onDeleteBranch: () => void;
+  onCompareBranch: () => void;
+  onToggleMyBranches: () => void;
+  onFavorite: () => void;
+}
+
+interface HeaderAction {
+  key: string;
+  icon: string;
+  titleKey: string;
+}
+
+/** Header buttons in IDEA tool-window order; expand/collapse are handled locally. */
+const HEADER_ACTIONS: readonly HeaderAction[] = [
+  { key: 'newBranch', icon: 'newBranch', titleKey: 'sidebar.newBranch' },
+  { key: 'refresh', icon: 'updateSelected', titleKey: 'sidebar.update' },
+  { key: 'fetch', icon: 'fetch', titleKey: 'sidebar.fetch' },
+  { key: 'delete', icon: 'deleteBranch', titleKey: 'sidebar.deleteBranch' },
+  { key: 'compare', icon: 'compareBranch', titleKey: 'sidebar.compareBranch' },
+  { key: 'favorite', icon: 'favoriteOutline', titleKey: 'sidebar.favorite' },
+  { key: 'expandAll', icon: 'expandAll', titleKey: 'sidebar.expandAll' },
+  { key: 'collapseAll', icon: 'collapseAll', titleKey: 'sidebar.collapseAll' },
+];
+
 /**
- * 创建分支面板
- * @param container 挂载容器
- * @param service 服务客户端（右键菜单操作使用）
- * @param directory 当前仓库目录
- * @param onBranchSelect 点击分支项回调：由 main 负责拉取该分支提交并设置分支过滤
- * @param onSelectionCleared 点击列表空白区域的取消选中回调（对齐 IntelliJ IDEA：
- *   分支面板存在选中分支 selectedBranch 或分支过滤 logBranch 时点击空白触发，
- *   由 main 清空选中态并恢复全部提交；两者都不存在时空操作不触发）
- * @returns 面板句柄（dispose 取消订阅、expandAll 展开全部分组、collapseAll 折叠全部分组）
+ * Why a branch action is unavailable, or null when it can run.
+ * Mirrors the IDEA action update() rules the icon rail used to apply.
+ */
+function unavailableReason(key: string, state: PanelState): string | null {
+  const localBranches = state.branches.filter(b => !b.isRemote);
+  const hasRemote = state.branches.some(b => b.isRemote);
+  const selected = state.selectedBranch;
+  switch (key) {
+    case 'newBranch':
+      return localBranches.length === 0 ? t('sidebar.newBranchUnavailable') : null;
+    case 'refresh':
+      return hasRemote ? null : t('sidebar.updateUnavailable');
+    case 'fetch':
+      if (state.fetching) return t('sidebar.fetchInProgress');
+      return hasRemote ? null : t('sidebar.updateUnavailable');
+    case 'delete':
+      if (!selected) return t('branch.selectBranch');
+      if (selected.isCurrent) return t('branch.deleteCurrent');
+      if (selected.isRemote) return t('sidebar.deleteRemoteUnavailable');
+      return null;
+    case 'compare':
+      if (state.selectedBranches.size === 2) return null;
+      if (!selected) return t('compare.selectBranch');
+      if (selected.isCurrent) return t('compare.currentBranch');
+      return null;
+    case 'favorite':
+      return selected || state.selectedBranches.size > 0 ? null : t('branch.selectBranch');
+    case 'expandAll':
+    case 'collapseAll':
+      return state.branches.length === 0 ? t('sidebar.expandAllUnavailable') : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Create the branch panel.
+ * @param container Mount point (filled with header, search row and tree)
+ * @param service Service client, used by the branch context menu
+ * @param directory Current repository directory
+ * @param onBranchSelect Click on a branch: main loads that branch's commits
+ * @param onSelectionCleared Click on empty space: main clears selection and filter
+ * @param actions Handlers for the header actions
  */
 export function createBranchPanel(
   container: HTMLElement,
   service: ServiceClient,
   directory: string,
   onBranchSelect: (branch: Branch) => void,
-  onSelectionCleared: () => void
+  onSelectionCleared: () => void,
+  actions: BranchActions,
 ): { dispose: () => void; expandAll: () => void; collapseAll: () => void } {
   let disposed = false;
   let listContainer: HTMLElement | null = null;
+  let search: SearchFieldHandle | null = null;
+  let myBranchesBtn: HTMLElement | null = null;
+  const headerButtons = new Map<string, HTMLElement>();
   const expandedGroups = new Set<string>([t('branch.groupHead'), t('branch.groupLocal')]);
   let unsubscribe: (() => void) | null = null;
 
@@ -61,134 +135,110 @@ export function createBranchPanel(
     return item.getAttribute('data-group');
   };
 
-  const render = () => {
-    if (disposed) return;
-    container.innerHTML = '';
-
-    // 搜索框
-    const searchContainer = html`
-      <div style="padding: 4px 6px; border-bottom: 1px solid #333; flex-shrink: 0;">
-        <div style="display: flex; align-items: center; background: #2a2a2a; border: 1px solid #444; border-radius: 3px; padding: 0 6px;">
-          <span style="color: #888; font-size: 12px; margin-right: 4px;">${getIcon('search')}</span>
-          <input 
-            type="text" 
-            placeholder="${t('branch.searchPlaceholder')}" 
-            style="flex: 1; padding: 4px 0; background: transparent; border: none; color: #ccc; font-size: 12px; outline: none;"
-          />
-        </div>
+  const buildHeader = (): HTMLElement => {
+    const header = html`
+      <div class="gm-branches__header">
+        <span class="gm-branches__title">${t('branch.title')}</span>
       </div>
     `;
 
-    const searchInput = searchContainer.querySelector('input') as HTMLInputElement;
-    searchInput.value = getState().branchFilter;
-    searchInput.addEventListener('input', (e) => {
-      const target = e.target as HTMLInputElement;
-      setState(s => { s.branchFilter = target.value; });
-      // 订阅回调会触发 renderList，此处无需重复调用
-    });
-    container.appendChild(searchContainer);
+    for (const action of HEADER_ACTIONS) {
+      const title = t(action.titleKey);
+      const btn = html`
+        <button type="button" class="gm-icon-btn" data-branch-action="${action.key}" title="${title}" aria-label="${title}">
+          ${getIcon(action.icon)}
+        </button>
+      `;
+      header.appendChild(btn);
+      headerButtons.set(action.key, btn);
+    }
 
-    // 分支列表
-    listContainer = html`
-      <div style="flex: 1; overflow-y: auto; overflow-x: hidden;"></div>
+    header.addEventListener('click', (e) => {
+      if (disposed) return;
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-branch-action]');
+      if (!btn) return;
+      const key = btn.dataset.branchAction ?? '';
+      if (key === 'newBranch') actions.onNewBranch();
+      else if (key === 'refresh') actions.onUpdateSelected();
+      else if (key === 'fetch') actions.onFetch();
+      else if (key === 'delete') actions.onDeleteBranch();
+      else if (key === 'compare') actions.onCompareBranch();
+      else if (key === 'favorite') actions.onFavorite();
+      else if (key === 'expandAll') expandAll();
+      else if (key === 'collapseAll') collapseAll();
+    });
+
+    return header;
+  };
+
+  const buildSearchRow = (): HTMLElement => {
+    const row = html`<div class="gm-branches__search"></div>`;
+    search = mountSearchField(row, {
+      value: getState().branchFilter,
+      placeholder: t('branch.searchPlaceholder'),
+      label: t('branch.searchPlaceholder'),
+      onChange: (value) => {
+        setState(s => { s.branchFilter = value; });
+      },
+    });
+
+    const title = t('sidebar.showMyBranches');
+    myBranchesBtn = html`
+      <button type="button" class="gm-icon-btn" data-branch-action="myBranches" title="${title}" aria-label="${title}" aria-pressed="false">
+        ${getIcon('search')}
+      </button>
     `;
-
-    listContainer.addEventListener('click', (e) => {
-      // 先处理分支选择（分支项可能嵌套在分组结构内，需优先匹配）
-      const branch = findBranchFromEvent(e);
-      if (branch) {
-        // 对齐 IDEA 分支树多选：Cmd/Ctrl 点击累加选中，普通点击单选
-        const multi = e.metaKey || e.ctrlKey;
-        console.debug(JSON.stringify({
-          prefix: '[branch-panel]',
-          event: 'branch_click',
-          branchName: branch.name,
-          multi,
-        }));
-
-        if (multi) {
-          // 多选：只维护选中集合，不切换提交列表（交由比较图标使用）
-          setState(s => {
-            const next = new Set(s.selectedBranches);
-            if (next.has(branch.name)) next.delete(branch.name);
-            else next.add(branch.name);
-            s.selectedBranches = next;
-            // 仅剩一个选中项时仍作为主选中分支，多于一个时主选中置空
-            const names = [...next];
-            s.selectedBranch = names.length === 1
-              ? s.branches.find(b => b.name === names[0]) ?? branch
-              : null;
-          });
-          renderList();
-          return;
-        }
-
-        // 先触发选择回调，再更新选中态（避免订阅回调异常阻断加载）
-        try {
-          console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'before_on_branch_select', branchName: branch.name }));
-          onBranchSelect(branch);
-          console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'after_on_branch_select', branchName: branch.name }));
-        } catch (err) {
-          console.error(JSON.stringify({ prefix: '[branch-panel]', event: 'on_branch_select_error', error: String(err) }));
-        }
-        setState(s => {
-          // 存最新数组里的对象（避免存快照后刷新导致字段过期）；找不到时退回点击时的对象
-          s.selectedBranch = s.branches.find(b => b.name === branch.name) ?? branch;
-          // 普通点击清空多选集合，与 IDEA 单选语义一致
-          s.selectedBranches = new Set<string>();
-        });
-        renderList();
-        return;
-      }
-
-      // 再处理分组折叠/展开
-      const groupEl = findGroupFromEvent(e);
-      if (groupEl) {
-        console.debug(JSON.stringify({
-          prefix: '[branch-panel]',
-          event: 'group_click',
-          groupName: groupEl,
-        }));
-        if (expandedGroups.has(groupEl)) {
-          expandedGroups.delete(groupEl);
-        } else {
-          expandedGroups.add(groupEl);
-        }
-        renderList();
-        // 分组点击不落入下方的空白清除逻辑
-        return;
-      }
-
-      // 空白区域点击（既非分支也非分组）：对齐 IntelliJ IDEA，
-      // 存在选中分支或分支过滤时触发清除回调；清除动作（改 state + 重新拉数据）由 main 统一实现
+    myBranchesBtn.addEventListener('click', () => {
+      if (disposed) return;
       const state = getState();
-      if (state.selectedBranch || state.logBranch) {
-        console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'blank_clear' }));
-        onSelectionCleared();
+      if (!state.branches.some(b => !b.isRemote)) return;
+      actions.onToggleMyBranches();
+    });
+    row.appendChild(myBranchesBtn);
+    return row;
+  };
+
+  /** Sync header availability, favourite icon and the "my branches" toggle. */
+  const syncActions = (): void => {
+    const state = getState();
+    for (const action of HEADER_ACTIONS) {
+      const btn = headerButtons.get(action.key);
+      if (!btn) continue;
+      const reason = unavailableReason(action.key, state);
+      btn.setAttribute('aria-disabled', String(reason !== null));
+      if (reason === null) {
+        btn.removeAttribute('disabled');
+        btn.setAttribute('title', t(action.titleKey));
+        btn.setAttribute('aria-label', t(action.titleKey));
       } else {
-        console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'blank_clear_noop' }));
+        btn.setAttribute('disabled', '');
+        btn.setAttribute('title', reason);
+        btn.setAttribute('aria-label', reason);
       }
-    });
+    }
 
-    listContainer.addEventListener('contextmenu', (e) => {
-      const branch = findBranchFromEvent(e);
-      if (branch) {
-        e.preventDefault();
-        showContextMenu(e, branch, service, directory);
-      }
-    });
+    // Filled star only when every selected branch is already a favourite.
+    const favourite = headerButtons.get('favorite');
+    if (favourite) {
+      const names = state.selectedBranches.size > 0
+        ? [...state.selectedBranches]
+        : (state.selectedBranch ? [state.selectedBranch.name] : []);
+      const allFavorited = names.length > 0 && names.every(name => state.favorites.has(name));
+      favourite.innerHTML = allFavorited ? getIcon('favorite') : getIcon('favoriteOutline');
+    }
 
-    container.appendChild(listContainer);
-    renderList();
+    if (myBranchesBtn) {
+      const hasLocal = state.branches.some(b => !b.isRemote);
+      myBranchesBtn.setAttribute('aria-pressed', String(state.showOnlyMyBranches));
+      myBranchesBtn.setAttribute('aria-disabled', String(!hasLocal));
+      const title = !hasLocal
+        ? t('sidebar.myBranchesUnavailable')
+        : state.showOnlyMyBranches ? t('sidebar.showMyBranchesOn') : t('sidebar.showMyBranches');
+      myBranchesBtn.setAttribute('title', title);
+      myBranchesBtn.setAttribute('aria-label', title);
+    }
 
-    // 订阅状态字段，变化时局部更新分支列表
-    if (unsubscribe) unsubscribe();
-    unsubscribe = subscribeFields(
-      ['branches', 'branchFilter', 'favorites', 'selectedBranch', 'showOnlyMyBranches', 'myBranches'],
-      () => {
-        if (!disposed) renderList();
-      }
-    );
+    search?.update({ value: state.branchFilter });
   };
 
   const renderList = () => {
@@ -197,7 +247,7 @@ export function createBranchPanel(
     listContainer.innerHTML = '';
 
     const filteredBranches = state.branches.filter(branch => {
-      // 只显示我的分支：本地与远程分支都按判定结果过滤（远程分支名形如 origin/xxx）
+      // "Only my branches" applies to local and remote branches alike.
       if (state.showOnlyMyBranches && !state.myBranches.has(branch.name)) {
         return false;
       }
@@ -205,27 +255,22 @@ export function createBranchPanel(
       return branch.name.toLowerCase().includes(state.branchFilter.toLowerCase());
     });
 
-    // 本地分支：包含当前分支（对齐 IDEA，当前分支只出现在本地分组内，不再单列 HEAD 组）
     const current = filteredBranches.filter(b => b.isCurrent);
-    // 本地分支：包含当前分支（对齐 IDEA，当前分支同时存在于 HEAD 组与本地组）
     const local = filteredBranches.filter(b => !b.isRemote);
     const remote = filteredBranches.filter(b => b.isRemote);
 
-    // HEAD(当前分支)：独立分组，点击即把提交列表过滤到当前分支提交
+    // HEAD (current branch) as its own group: clicking it filters the log to it.
     if (current.length > 0) {
       listContainer.appendChild(
         createGroup(t('branch.groupHead'), current, expandedGroups.has(t('branch.groupHead')))
       );
     }
 
-    // 本地分支 - 按文件夹分组
     if (local.length > 0) {
       const groups = groupBranches(local);
-      const localGroup = createCollapsibleGroup(t('branch.groupLocal'), groups);
-      listContainer.appendChild(localGroup);
+      listContainer.appendChild(createCollapsibleGroup(t('branch.groupLocal'), groups));
     }
 
-    // 远程分支
     if (remote.length > 0) {
       listContainer.appendChild(
         createGroup(t('branch.groupRemote'), remote, expandedGroups.has(t('branch.groupRemote')))
@@ -233,12 +278,7 @@ export function createBranchPanel(
     }
   };
 
-  /**
-   * 展开全部可折叠分组：HEAD(当前分支)/本地/远程 三大分组，
-   * 以及"本地"分组内由 createCollapsibleGroup 渲染的文件夹分组
-   * （文件夹 key 与 groupBranches 一致，取分支名第一段）
-   * dispose 后调用为安全空操作
-   */
+  /** Expand every collapsible group, including folder groups. */
   const expandAll = () => {
     if (disposed) return;
     expandedGroups.add(t('branch.groupHead'));
@@ -258,17 +298,7 @@ export function createBranchPanel(
     renderList();
   };
 
-  const dispose = () => {
-    disposed = true;
-    if (unsubscribe) {
-      unsubscribe();
-      unsubscribe = null;
-    }
-  };
-  render();
-  /**
-   * 折叠全部分组（HEAD / 本地 / 远程 / 文件夹），对齐 IDEA Collapse All
-   */
+  /** Collapse every group (HEAD / local / remote / folders). */
   const collapseAll = () => {
     if (disposed) return;
     expandedGroups.clear();
@@ -279,9 +309,7 @@ export function createBranchPanel(
     renderList();
   };
 
-  return { dispose, expandAll, collapseAll };
-
-  /** 按文件夹名分组分支 */
+  /** Group branches by their first path segment. */
   function groupBranches(branches: Branch[]): Map<string, Branch[]> {
     const groups = new Map<string, Branch[]>();
     const rootBranches: Branch[] = [];
@@ -299,14 +327,11 @@ export function createBranchPanel(
       }
     }
 
-    // 根分支放在最前面
+    // Root branches first, then folder groups.
     const result = new Map<string, Branch[]>();
     for (const branch of rootBranches) {
-      const key = branch.name;
-      result.set(key, [branch]);
+      result.set(branch.name, [branch]);
     }
-
-    // 文件夹分组
     for (const [folder, branchList] of groups) {
       result.set(folder, branchList);
     }
@@ -314,95 +339,202 @@ export function createBranchPanel(
     return result;
   }
 
-  /** 创建可折叠分组 */
-  function createCollapsibleGroup(title: string, groups: Map<string, Branch[]>): HTMLElement {
-    const isExpanded = expandedGroups.has(title);
-
-    const groupEl = html`
-      <div style="margin-bottom: 2px;">
-        <div data-group="${title}" style="display: flex; align-items: center; padding: 4px 8px; font-size: 11px; color: #888; cursor: pointer; user-select: none;">
-          <span style="margin-right: 4px; font-size: 8px;">${isExpanded ? '▼' : '▶'}</span>
-          ${title}
-        </div>
+  function groupHeader(title: string, key: string, expanded: boolean): HTMLElement {
+    return html`
+      <div data-group="${key}" class="gm-branch-group__header" role="button" tabindex="0">
+        <span class="gm-branch-group__caret">${expanded ? '▼' : '▶'}</span>
+        ${title}
       </div>
     `;
+  }
 
-    if (isExpanded) {
-      for (const [key, branches] of groups) {
-        if (branches.length === 1 && key === branches[0].name) {
-          // 单个分支
-          groupEl.appendChild(createBranchItem(branches[0]));
-        } else {
-          // 文件夹分组
-          const folderExpanded = expandedGroups.has(key);
-          const folderEl = html`
-            <div style="margin-left: 12px;">
-              <div data-group="${key}" style="display: flex; align-items: center; padding: 3px 8px; font-size: 11px; color: #888; cursor: pointer; user-select: none;">
-                <span style="margin-right: 4px; font-size: 8px;">${folderExpanded ? '▼' : '▶'}</span>
-                ${key}
-              </div>
-            </div>
-          `;
+  function createCollapsibleGroup(title: string, groups: Map<string, Branch[]>): HTMLElement {
+    const isExpanded = expandedGroups.has(title);
+    const groupEl = html`<div class="gm-branch-group"></div>`;
+    groupEl.appendChild(groupHeader(title, title, isExpanded));
 
-          if (folderExpanded) {
-            for (const branch of branches) {
-              const branchItem = createBranchItem(branch);
-              branchItem.style.paddingLeft = '32px';
-              folderEl.appendChild(branchItem);
-            }
-          }
+    if (!isExpanded) return groupEl;
 
-          groupEl.appendChild(folderEl);
+    for (const [key, branches] of groups) {
+      if (branches.length === 1 && key === branches[0].name) {
+        groupEl.appendChild(createBranchItem(branches[0]));
+        continue;
+      }
+
+      // Folder group inside "Local".
+      const folderExpanded = expandedGroups.has(key);
+      const folderEl = html`<div class="gm-branch-group gm-branch-group--nested"></div>`;
+      folderEl.appendChild(groupHeader(key, key, folderExpanded));
+      if (folderExpanded) {
+        for (const branch of branches) {
+          const branchItem = createBranchItem(branch);
+          branchItem.classList.add('gm-branch-item--nested');
+          folderEl.appendChild(branchItem);
         }
       }
+      groupEl.appendChild(folderEl);
     }
 
     return groupEl;
   }
 
-  /** 创建简单分组 (HEAD, 远程) */
   function createGroup(title: string, branches: Branch[], expanded: boolean): HTMLElement {
-    const group = html`
-      <div style="margin-bottom: 2px;">
-        <div data-group="${title}" style="display: flex; align-items: center; padding: 4px 8px; font-size: 11px; color: #888; cursor: pointer; user-select: none;">
-          <span style="margin-right: 4px; font-size: 8px;">${expanded ? '▼' : '▶'}</span>
-          ${title}
-        </div>
-      </div>
-    `;
-
+    const group = html`<div class="gm-branch-group"></div>`;
+    group.appendChild(groupHeader(title, title, expanded));
     if (expanded) {
       for (const branch of branches) {
         group.appendChild(createBranchItem(branch));
       }
     }
-
     return group;
   }
 
   function createBranchItem(branch: Branch): HTMLElement {
     const state = getState();
     const isFavorite = state.favorites.has(branch.name);
-    // 选中态：点击的分支（多选集合优先，其次单选分支；区别于 HEAD 当前分支）
+    // Selection is the clicked branch (multi-select wins over single select) and
+    // stays distinct from the current branch, which is only emphasised.
     const isSelected = state.selectedBranches.has(branch.name)
       || (state.selectedBranches.size === 0 && state.selectedBranch?.name === branch.name);
-    const bgStyle = isSelected
-      ? 'background: #2e4a6e;'
-      : branch.isCurrent
-        ? 'background: #2a3a4a;'
-        : '';
 
-    return html`
-      <div 
-        style="display: flex; align-items: center; padding: 3px 8px 3px 20px; cursor: pointer; font-size: 12px; ${bgStyle}"
+    const item = html`
+      <div
+        class="gm-branch-item"
         data-branch="${branch.name}"
+        data-current="${branch.isCurrent ? 'true' : 'false'}"
+        aria-selected="${isSelected ? 'true' : 'false'}"
       >
-        <span style="margin-right: 6px; flex-shrink: 0;">${getIcon('branchIcon')}</span>
-        ${isFavorite ? `<span style="margin-right: 4px; display: flex; align-items: center; width: 12px; flex-shrink: 0;" title="${t('branch.unfavorite')}">${getIcon('favorite')}</span>` : ''}
-        <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${branch.isCurrent ? 'font-weight: bold; color: #fff;' : 'color: #ccc;'}">${branch.name}</span>
-        ${branch.hasUnpushed && branch.unpushedCount ? `<span style="font-size: 10px; color: #4caf50; margin-left: 4px;">↑${branch.unpushedCount}</span>` : ''}
-        ${branch.hasUnpulled && branch.unpulledCount ? `<span style="font-size: 10px; color: #589df6; margin-left: 4px;">↓${branch.unpulledCount}</span>` : ''}
+        <span class="gm-branch-item__icon">${getIcon('branchIcon')}</span>
+        ${isFavorite
+          ? html`<span class="gm-branch-item__favorite" title="${t('branch.unfavorite')}">${getIcon('favorite')}</span>`
+          : ''}
+        <span class="gm-branch-item__name">${branch.name}</span>
+        ${branch.hasUnpushed && branch.unpushedCount
+          ? html`<span class="gm-branch-item__count gm-branch-item__count--unpushed">↑${branch.unpushedCount}</span>`
+          : ''}
+        ${branch.hasUnpulled && branch.unpulledCount
+          ? html`<span class="gm-branch-item__count gm-branch-item__count--unpulled">↓${branch.unpulledCount}</span>`
+          : ''}
       </div>
     `;
+    return item;
   }
+
+  const render = (): void => {
+    if (disposed) return;
+    container.innerHTML = '';
+    container.appendChild(buildHeader());
+    container.appendChild(buildSearchRow());
+
+    listContainer = html`
+      <div class="gm-branches__list" data-branch-list></div>
+    `;
+
+    listContainer.addEventListener('click', (e) => {
+      // Branch selection wins over group toggling: a branch can sit inside a group.
+      const branch = findBranchFromEvent(e);
+      if (branch) {
+        const multi = e.metaKey || e.ctrlKey;
+        console.debug(JSON.stringify({
+          prefix: '[branch-panel]',
+          event: 'branch_click',
+          branchName: branch.name,
+          multi,
+        }));
+
+        if (multi) {
+          // Multi-select only maintains the set; it does not switch the log.
+          setState(s => {
+            const next = new Set(s.selectedBranches);
+            if (next.has(branch.name)) next.delete(branch.name);
+            else next.add(branch.name);
+            s.selectedBranches = next;
+            const names = [...next];
+            s.selectedBranch = names.length === 1
+              ? s.branches.find(b => b.name === names[0]) ?? branch
+              : null;
+          });
+          renderList();
+          return;
+        }
+
+        try {
+          console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'before_on_branch_select', branchName: branch.name }));
+          onBranchSelect(branch);
+          console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'after_on_branch_select', branchName: branch.name }));
+        } catch (err) {
+          console.error(JSON.stringify({ prefix: '[branch-panel]', event: 'on_branch_select_error', error: String(err) }));
+        }
+        setState(s => {
+          s.selectedBranch = s.branches.find(b => b.name === branch.name) ?? branch;
+          s.selectedBranches = new Set<string>();
+        });
+        renderList();
+        return;
+      }
+
+      const groupEl = findGroupFromEvent(e);
+      if (groupEl) {
+        console.debug(JSON.stringify({
+          prefix: '[branch-panel]',
+          event: 'group_click',
+          groupName: groupEl,
+        }));
+        if (expandedGroups.has(groupEl)) {
+          expandedGroups.delete(groupEl);
+        } else {
+          expandedGroups.add(groupEl);
+        }
+        renderList();
+        return;
+      }
+
+      // Empty space: IDEA clears the selection and the branch filter.
+      const state = getState();
+      if (state.selectedBranch || state.logBranch) {
+        console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'blank_clear' }));
+        onSelectionCleared();
+      } else {
+        console.debug(JSON.stringify({ prefix: '[branch-panel]', event: 'blank_clear_noop' }));
+      }
+    });
+
+    listContainer.addEventListener('contextmenu', (e) => {
+      const branch = findBranchFromEvent(e);
+      if (branch) {
+        e.preventDefault();
+        showContextMenu(e, branch, service, directory);
+      }
+    });
+
+    container.appendChild(listContainer);
+    syncActions();
+    renderList();
+
+    if (unsubscribe) unsubscribe();
+    unsubscribe = subscribeFields(
+      ['branches', 'branchFilter', 'favorites', 'selectedBranch', 'selectedBranches', 'showOnlyMyBranches', 'myBranches', 'fetching'],
+      () => {
+        if (disposed) return;
+        syncActions();
+        renderList();
+      }
+    );
+  };
+
+  const dispose = () => {
+    disposed = true;
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+    search?.dispose();
+    search = null;
+    myBranchesBtn = null;
+    headerButtons.clear();
+  };
+
+  render();
+
+  return { dispose, expandAll, collapseAll };
 }

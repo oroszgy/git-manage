@@ -1552,8 +1552,6 @@ describe('commit-list', () => {
   // ===== 过滤工具栏接线（Cc / .* / 分支▾ / 用户▾ / 日期▾ / 路径▾） =====
 
   /** 激活态按钮背景色断言值（#1a3a5a / #333） */
-  const ACTIVE_BG = 'rgb(26, 58, 90)';
-  const IDLE_BG = 'rgb(51, 51, 51)';
 
   /** 获取当前打开的下拉菜单容器（不存在返回 null） */
   const dropdownMenu = () => document.getElementById('git-dropdown-menu');
@@ -1674,21 +1672,19 @@ describe('commit-list', () => {
     try {
       regexBtn.click();
       expect(getState().searchRegex).toBe(true);
-      expect(regexBtn.style.backgroundColor).toBe(ACTIVE_BG);
-      expect(regexBtn.style.border).toBe('1px solid rgb(42, 90, 138)');
-      expect(regexBtn.style.color).toBe('rgb(207, 232, 255)');
+      expect(regexBtn.getAttribute('aria-pressed')).toBe('true');
 
       caseBtn.click();
       expect(getState().searchCaseSensitive).toBe(true);
-      expect(caseBtn.style.backgroundColor).toBe(ACTIVE_BG);
+      expect(caseBtn.getAttribute('aria-pressed')).toBe('true');
 
       regexBtn.click(); // 再次点击恢复
       expect(getState().searchRegex).toBe(false);
-      expect(regexBtn.style.backgroundColor).toBe(IDLE_BG);
+      expect(regexBtn.getAttribute('aria-pressed')).toBe('false');
 
       caseBtn.click();
       expect(getState().searchCaseSensitive).toBe(false);
-      expect(caseBtn.style.backgroundColor).toBe(IDLE_BG);
+      expect(caseBtn.getAttribute('aria-pressed')).toBe('false');
 
       const events = parseDebugLogs(debugSpy).map(p => p.event);
       expect(events).toContain('search_regex_toggled');
@@ -1706,13 +1702,13 @@ describe('commit-list', () => {
     const dateBtn = toolbarBtn('btn-filter-date');
 
     setState(s => { s.logBranch = 'dev'; });
-    expect(branchBtn.style.backgroundColor).toBe(ACTIVE_BG);
+    expect(branchBtn.getAttribute('aria-pressed')).toBe('true');
 
     setState(s => { s.filterAuthor = '张三'; });
-    expect(userBtn.style.backgroundColor).toBe(ACTIVE_BG);
+    expect(userBtn.getAttribute('aria-pressed')).toBe('true');
 
     setState(s => { s.filterDateFrom = new Date().toISOString(); });
-    expect(dateBtn.style.backgroundColor).toBe(ACTIVE_BG);
+    expect(dateBtn.getAttribute('aria-pressed')).toBe('true');
 
     // 清除全部过滤状态 → 恢复未激活样式
     setState(s => {
@@ -1720,9 +1716,9 @@ describe('commit-list', () => {
       s.filterAuthor = '';
       s.filterDateFrom = '';
     });
-    expect(branchBtn.style.backgroundColor).toBe(IDLE_BG);
-    expect(userBtn.style.backgroundColor).toBe(IDLE_BG);
-    expect(dateBtn.style.backgroundColor).toBe(IDLE_BG);
+    expect(branchBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(userBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(dateBtn.getAttribute('aria-pressed')).toBe('false');
     // 按钮元素引用未被重建（激活态刷新只改样式）
     expect(toolbarBtn('btn-filter-branch')).toBe(branchBtn);
   });
@@ -1832,7 +1828,7 @@ describe('commit-list', () => {
     dropdownRow('李四')!.click();
     expect(getState().filterAuthor).toBe('李四');
     expect(filteredHashes()).toEqual(['h2']);
-    expect(toolbarBtn('btn-filter-user').style.backgroundColor).toBe(ACTIVE_BG);
+    expect(toolbarBtn('btn-filter-user').getAttribute('aria-pressed')).toBe('true');
 
     // 再次打开选“全部” → 清除作者过滤
     toolbarBtn('btn-filter-user').click();
@@ -1840,7 +1836,7 @@ describe('commit-list', () => {
     dropdownRow('all')!.click();
     expect(getState().filterAuthor).toBe('');
     expect(filteredHashes()).toEqual(['h1', 'h2', 'h3', 'h4']);
-    expect(toolbarBtn('btn-filter-user').style.backgroundColor).toBe(IDLE_BG);
+    expect(toolbarBtn('btn-filter-user').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('用户下拉应输出结构化选择日志', () => {
@@ -1893,7 +1889,7 @@ describe('commit-list', () => {
       expect(getState().filterDateFrom).toBe(new Date(2026, 0, 15, 0, 0, 0, 0).toISOString());
       expect(getState().filterDateTo).toBe(new Date(2026, 0, 15, 23, 59, 59, 999).toISOString());
       expect(filteredHashes()).toEqual(['c-new']); // 旧提交被排除
-      expect(toolbarBtn('btn-filter-date').style.backgroundColor).toBe(ACTIVE_BG);
+      expect(toolbarBtn('btn-filter-date').getAttribute('aria-pressed')).toBe('true');
     } finally {
       vi.useRealTimers();
     }
@@ -1945,7 +1941,7 @@ describe('commit-list', () => {
       expect(getState().filterDateFrom).toBe('');
       expect(getState().filterDateTo).toBe('');
       expect(filteredHashes()).toEqual(['h1', 'h2', 'h3', 'h4']);
-      expect(toolbarBtn('btn-filter-date').style.backgroundColor).toBe(IDLE_BG);
+      expect(toolbarBtn('btn-filter-date').getAttribute('aria-pressed')).toBe('false');
 
       // 再打开：all 勾选、today 无勾
       toolbarBtn('btn-filter-date').click();
@@ -1976,7 +1972,7 @@ describe('commit-list', () => {
     expect(getState().filterDateFrom).toBe('2026-01-01');
     expect(getState().filterDateTo).toBe('2026-01-31');
     expect(document.getElementById('daterange-from')).toBeNull(); // 应用后关闭
-    expect(toolbarBtn('btn-filter-date').style.backgroundColor).toBe(ACTIVE_BG);
+    expect(toolbarBtn('btn-filter-date').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('日期下拉应输出结构化选择日志', () => {
@@ -2004,10 +2000,10 @@ describe('commit-list', () => {
     // 不再是禁用态：无 disabled 属性、可点击光标、不弱化透明度
     expect(pathBtn.hasAttribute('disabled')).toBe(false);
     expect(pathBtn.disabled).toBe(false);
-    expect(pathBtn.getAttribute('style')).toBe(branchBtn.getAttribute('style'));
-    expect(pathBtn.style.cursor).toBe('pointer');
-    expect(pathBtn.getAttribute('style')).not.toContain('opacity');
-    expect(pathBtn.getAttribute('style')).not.toContain('not-allowed');
+    // Identical markup and classes: appearance is entirely in styles.css.
+    expect(pathBtn.className).toBe(branchBtn.className);
+    expect(pathBtn.getAttribute('style')).toBeNull();
+    expect(branchBtn.getAttribute('style')).toBeNull();
     // label 为 zh-CN 的 filter.path 文案（不再设置 pathSoon 提示）
     expect(pathBtn.textContent).toContain('路径');
     expect(pathBtn.title).not.toContain('暂未实现');
@@ -2055,7 +2051,7 @@ describe('commit-list', () => {
     setupCommits();
     createPanel();
     setState(s => { s.filterPaths = ['src/']; }); // 已有路径过滤 → 按钮激活
-    expect(toolbarBtn('btn-filter-path').style.backgroundColor).toBe(ACTIVE_BG);
+    expect(toolbarBtn('btn-filter-path').getAttribute('aria-pressed')).toBe('true');
     getLogMock.mockResolvedValue(makeCommits());
 
     const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
@@ -2068,7 +2064,7 @@ describe('commit-list', () => {
       await vi.waitFor(() => {
         expect(getLogMock).toHaveBeenCalledWith('/repo', undefined, undefined);
       });
-      expect(toolbarBtn('btn-filter-path').style.backgroundColor).toBe(IDLE_BG); // 激活态熄灭
+      expect(toolbarBtn('btn-filter-path').getAttribute('aria-pressed')).toBe('false'); // 激活态熄灭
 
       const log = parseDebugLogs(debugSpy).find(p => p.event === 'path_dropdown_select');
       expect(log).toMatchObject({ prefix: '[commit-list]', event: 'path_dropdown_select', path: [] });
@@ -2113,7 +2109,7 @@ describe('commit-list', () => {
     await vi.waitFor(() => {
       expect(getLogMock).toHaveBeenCalledWith('/repo', undefined, undefined);
     });
-    expect(toolbarBtn('btn-filter-path').style.backgroundColor).toBe(IDLE_BG); // 激活态熄灭
+    expect(toolbarBtn('btn-filter-path').getAttribute('aria-pressed')).toBe('false'); // 激活态熄灭
   });
 
   it('点选择文件夹应打开路径勾选树并保留不在列表中的已选路径', async () => {
@@ -2163,7 +2159,7 @@ describe('commit-list', () => {
       await vi.waitFor(() => {
         expect(getLogMock).toHaveBeenCalledWith('/repo', undefined, ['src']);
       });
-      expect(toolbarBtn('btn-filter-path').style.backgroundColor).toBe(ACTIVE_BG);
+      expect(toolbarBtn('btn-filter-path').getAttribute('aria-pressed')).toBe('true');
 
       const log = parseDebugLogs(debugSpy).find(p => p.event === 'path_dropdown_select');
       expect(log).toMatchObject({ prefix: '[commit-list]', event: 'path_dropdown_select', path: ['src'] });
@@ -2195,13 +2191,13 @@ describe('commit-list', () => {
     setupCommits();
     createPanel();
     const pathBtn = toolbarBtn('btn-filter-path');
-    expect(pathBtn.style.backgroundColor).toBe(IDLE_BG); // 初始空数组不过滤
+    expect(pathBtn.getAttribute('aria-pressed')).toBe('false'); // 初始空数组不过滤
 
     setState(s => { s.filterPaths = ['src/']; });
-    expect(pathBtn.style.backgroundColor).toBe(ACTIVE_BG); // 非空 → 点亮
+    expect(pathBtn.getAttribute('aria-pressed')).toBe('true'); // 非空 → 点亮
 
     setState(s => { s.filterPaths = []; });
-    expect(pathBtn.style.backgroundColor).toBe(IDLE_BG); // 恢复空数组 → 熄灭
+    expect(pathBtn.getAttribute('aria-pressed')).toBe('false'); // 恢复空数组 → 熄灭
     // 激活态刷新只改样式，不重建按钮元素
     expect(toolbarBtn('btn-filter-path')).toBe(pathBtn);
   });
@@ -2269,7 +2265,7 @@ describe('commit-list', () => {
     await vi.waitFor(() => {
       expect(getLogMock).toHaveBeenCalledWith('/repo', undefined, ['src/', 'docs/core']);
     });
-    expect(toolbarBtn('btn-filter-path').style.backgroundColor).toBe(ACTIVE_BG); // 激活态点亮
+    expect(toolbarBtn('btn-filter-path').getAttribute('aria-pressed')).toBe('true'); // 激活态点亮
   });
 
   it('编辑路径确定值与当前相同应仅关闭且不重复发起请求', () => {
@@ -2346,7 +2342,7 @@ describe('commit-list', () => {
     createPanel();
 
     const list = row('h1').parentElement as HTMLElement;
-    expect(list.style.userSelect).toBe('none');
+    expect(list.classList.contains('gm-commit-list')).toBe(true);
   });
 
   it('拖拽应该连续选中经过的提交行', () => {
