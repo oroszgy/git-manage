@@ -1,0 +1,50 @@
+{
+  "name": "git-manager",
+  "version": "0.0.9",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "build:panel": "npx esbuild panel/main.ts --bundle --format=iife --outfile=dist/panel/main.js --platform=browser && cp panel/index.html panel/styles.css dist/panel/",
+    "build:service": "npx esbuild service/main.ts --bundle --format=cjs --outfile=dist/service/main.js --platform=node --target=node20",
+    "build": "npm run build:panel && npm run build:service",
+    "dev": "node scripts/dev.mjs",
+    "pack": "node scripts/pack.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:blackbox": "node --test service/__test-blackbox__/*.test.mjs"
+  },
+  "openchamber": {
+    "apiVersion": 1,
+    "engines": {
+      "openchamber": ">=1.22.0"
+    },
+    "contributes": {
+      "panel": {
+        "id": "git-manager",
+        "name": "Git Manager",
+        "icon": "git-branch",
+        "entry": "dist/panel/index.html"
+      },
+      "service": {
+        "entry": "dist/service/main.js",
+        "runtime": "host",
+        "permissions": {
+          "exec": [
+            "git"
+          ]
+        }
+      },
+      "capabilities": [
+        "files"
+      ],
+      "filesystem": [
+        "/.git/**"
+      ]
+    }
+  },
+  "dependencies": {
+    "@openchamber/sdk": "^2.5.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

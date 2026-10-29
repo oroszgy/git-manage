@@ -1,0 +1,1801 @@
+/*
+ * Panel stylesheet.
+ *
+ * Colours, fonts, radii and interaction states come from the host theme, which
+ * the guest applies onto <html> with `applyHostReady` (see theme.ts): the SDK
+ * writes --oc-* there on every `ready`. Nothing here hardcodes a palette, so a
+ * light host theme restyles the whole panel without a rebuild.
+ *
+ * Rules are class based on purpose: the host appends its own look CSS after
+ * this document, so an equal-specificity override in the head would lose.
+ * Inline styles remain only for values computed at runtime — popup
+ * coordinates, graph geometry and diff line data.
+ */
+
+/* ---------------------------------------------------------------------------
+ * First paint
+ * The frame is painted before the host answers `ready`, so no token exists yet.
+ * Stay invisible until the theme lands; if the host never answers, the fallback
+ * palette below paints a usable dark panel instead of a white void.
+ * ------------------------------------------------------------------------- */
+html {
+  visibility: hidden;
+}
+
+html[data-oc-theme],
+html[data-oc-fallback] {
+  visibility: visible;
+}
+
+html[data-oc-fallback] {
+  color-scheme: dark;
+  --oc-bg: #17181b;
+  --oc-elevated: #1f2126;
+  --oc-muted-surface: #1c1d21;
+  --oc-subtle: #23252a;
+  --oc-fg: #e7e8ea;
+  --oc-elevated-fg: #f1f2f4;
+  --oc-muted: #9aa1aa;
+  --oc-border: #2f3238;
+  --oc-hover: rgb(255 255 255 / 0.06);
+  --oc-active: rgb(255 255 255 / 0.1);
+  --oc-selection: rgb(59 130 246 / 0.2);
+  --oc-selection-fg: #eaf1ff;
+  --oc-focus: #3b82f6;
+  --oc-primary: #3b82f6;
+  --oc-primary-fg: #ffffff;
+  --oc-success: #4ade80;
+  --oc-warning: #fbbf24;
+  --oc-error: #f87171;
+  --oc-info: #38bdf8;
+  --oc-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --oc-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --oc-radius: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * IDE density is deliberate: 12px base and fixed px rows, so row count per
+ * screen does not move with the host's interface size.
+ * ------------------------------------------------------------------------- */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--oc-bg);
+  color: var(--oc-fg);
+  font-family: var(--oc-font);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shell
+ * ------------------------------------------------------------------------- */
+.gm-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gm-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.gm-branches {
+  /* The header wraps its actions below 220px; the title still needs room. */
+  width: var(--gm-branches-w, 280px);
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gm-main {
+  flex: 1 1 auto;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gm-side {
+  width: var(--gm-side-w, 300px);
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* A vertical pane inside a column: half of .gm-side, whole of .gm-main. */
+.gm-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gm-pane--stacked {
+  flex: 0 1 var(--gm-files-pane-h, 50%);
+}
+
+.gm-bottom {
+  display: none;
+  height: var(--gm-bottom-h, 220px);
+  min-height: 120px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.gm-bottom[data-open="true"] {
+  display: block;
+}
+
+/* ---------------------------------------------------------------------------
+ * Draggable dividers
+ * A 5px hit area painting a single 1px line; the line turns primary while the
+ * pointer is over it, it has focus, or it is being dragged.
+ * ------------------------------------------------------------------------- */
+.gm-splitter {
+  position: relative;
+  flex: 0 0 5px;
+  align-self: stretch;
+  z-index: 3;
+  background: transparent;
+  touch-action: none;
+}
+
+.gm-splitter[hidden] {
+  display: none;
+}
+
+.gm-splitter--x {
+  cursor: col-resize;
+}
+
+.gm-splitter--y {
+  cursor: row-resize;
+}
+
+.gm-splitter::before {
+  content: "";
+  position: absolute;
+  background: var(--oc-border);
+}
+
+.gm-splitter--x::before {
+  inset: 0 auto 0 2px;
+  width: 1px;
+}
+
+.gm-splitter--y::before {
+  inset: 2px 0 auto 0;
+  height: 1px;
+}
+
+.gm-splitter:hover::before,
+.gm-splitter:focus-visible::before,
+.gm-splitter--active::before {
+  background: var(--oc-primary);
+}
+
+.gm-splitter:focus-visible {
+  outline: 1px solid var(--oc-focus);
+  outline-offset: -1px;
+}
+
+/* Keep the resize cursor while the pointer leaves the 5px handle. */
+html.gm-splitter-dragging {
+  user-select: none;
+}
+
+html.gm-splitter-dragging--x,
+html.gm-splitter-dragging--x * {
+  cursor: col-resize !important;
+}
+
+html.gm-splitter-dragging--y,
+html.gm-splitter-dragging--y * {
+  cursor: row-resize !important;
+}
+
+/* Top progress bar: height 0 at rest, 2px while a fetch is running. */
+.gm-progress {
+  height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  transition: height 0.15s;
+}
+
+.gm-progress__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 30%;
+  background: var(--oc-primary);
+  opacity: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bottom tabs
+ * ------------------------------------------------------------------------- */
+.gm-tabbar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--oc-border);
+}
+
+.gm-tabbar__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+}
+
+.gm-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: calc(var(--oc-radius) - 2px);
+  border: 1px solid transparent;
+  color: var(--oc-muted);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gm-tab:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-tab[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-tab:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared primitives
+ * Thin wrappers over the host's interaction tokens, used by the bespoke chrome
+ * the SDK kit does not cover (rows, graph, trees, menus, dialogs).
+ * ------------------------------------------------------------------------- */
+.gm-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: calc(var(--oc-radius) - 2px);
+  background: transparent;
+  color: var(--oc-muted);
+  cursor: pointer;
+}
+
+.gm-icon-btn:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-icon-btn:active {
+  background: var(--oc-active);
+}
+
+.gm-icon-btn[aria-pressed="true"],
+.gm-icon-btn--active {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-icon-btn[disabled],
+.gm-icon-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.gm-icon-btn:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}
+
+.gm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--oc-border);
+  border-radius: calc(var(--oc-radius) - 2px);
+  background: var(--oc-elevated);
+  color: var(--oc-fg);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.gm-btn:hover {
+  background: var(--oc-hover);
+}
+
+.gm-btn:active {
+  background: var(--oc-active);
+}
+
+.gm-btn--primary {
+  background: var(--oc-primary);
+  border-color: var(--oc-primary);
+  color: var(--oc-primary-fg);
+}
+
+.gm-btn--primary:hover {
+  background: color-mix(in srgb, var(--oc-primary) 88%, var(--oc-fg));
+}
+
+.gm-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--oc-muted);
+}
+
+.gm-btn--ghost:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-btn--destructive {
+  color: var(--oc-error);
+}
+
+.gm-btn[disabled],
+.gm-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.gm-btn:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}
+
+/* A text field drawn by the panel (menus, dialogs, filters). */
+.gm-input {
+  display: block;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--oc-border);
+  border-radius: calc(var(--oc-radius) - 2px);
+  background: var(--oc-bg);
+  color: var(--oc-fg);
+  font-size: 12px;
+  outline: none;
+}
+
+.gm-input::placeholder {
+  color: var(--oc-muted);
+}
+
+.gm-input:focus {
+  border-color: var(--oc-focus);
+}
+
+.gm-input[data-invalid="true"] {
+  border-color: var(--oc-error);
+}
+
+.gm-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+}
+
+.gm-mono {
+  font-family: var(--oc-mono);
+}
+
+.gm-muted {
+  color: var(--oc-muted);
+}
+
+.gm-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--oc-muted);
+  font-size: 12px;
+}
+
+/* Scrollbars are the host's: it injects GUEST_SCROLLBAR_CSS (overlay, hidden
+ * at rest) into every served document, so the panel must not style them. */
+
+/* ---------------------------------------------------------------------------
+ * Branch panel
+ * Header carries the branch actions that used to live in the icon rail; the
+ * search row carries the "my branches" toggle.
+ * ------------------------------------------------------------------------- */
+.gm-branches[hidden] {
+  display: none;
+}
+
+/* Eight header actions plus a title: 22px buttons, wrapping when the column is
+ * dragged below their single-row width. */
+.gm-branches__header .gm-icon-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.gm-branches__header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 4px 4px 10px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.gm-branches__title {
+  flex: 0 0 auto;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+}
+
+.gm-branches__search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.gm-branches__search > .oc-sdk-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Density override: the kit ships 32px fields, the tree needs a 24px row. */
+.gm-branches__search .oc-sdk-input,
+.gm-toolbar .oc-sdk-input {
+  height: 24px;
+  padding-left: 26px;
+  padding-right: 24px;
+  font-size: 12px;
+}
+
+.gm-branches__search .oc-sdk-search-icon,
+.gm-toolbar .oc-sdk-search-icon {
+  left: 8px;
+}
+
+.gm-branches__search .oc-sdk-search-clear,
+.gm-toolbar .oc-sdk-search-clear {
+  right: 2px;
+  width: 20px;
+  height: 20px;
+}
+
+.gm-branches__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 0 6px;
+}
+
+.gm-branch-group {
+  margin-bottom: 2px;
+}
+
+.gm-branch-group--nested {
+  margin-left: 12px;
+}
+
+.gm-branch-group__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--oc-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.gm-branch-group__header:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-branch-group__caret {
+  width: 8px;
+  font-size: 8px;
+  flex: 0 0 auto;
+}
+
+.gm-branch-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 20px;
+  font-size: 12px;
+  color: var(--oc-fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.gm-branch-item--nested {
+  padding-left: 32px;
+}
+
+.gm-branch-item:hover {
+  background: var(--oc-hover);
+}
+
+.gm-branch-item[data-current="true"] {
+  font-weight: 600;
+}
+
+.gm-branch-item[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-branch-item__icon,
+.gm-branch-item__favorite {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--oc-muted);
+}
+
+.gm-branch-item__favorite {
+  color: var(--oc-warning);
+}
+
+.gm-branch-item__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-branch-item__count {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gm-branch-item__count--unpushed {
+  color: var(--oc-success);
+}
+
+.gm-branch-item__count--unpulled {
+  color: var(--oc-primary);
+}
+
+/* ---------------------------------------------------------------------------
+ * Commit toolbar
+ * ------------------------------------------------------------------------- */
+.gm-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.gm-toolbar__search {
+  flex: 0 1 280px;
+  min-width: 120px;
+}
+
+.gm-toolbar__divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--oc-border);
+}
+
+.gm-filter-btn--code {
+  font-family: var(--oc-mono);
+  font-size: 10.5px;
+}
+
+.gm-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--oc-radius) - 3px);
+  background: transparent;
+  color: var(--oc-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.gm-filter-btn:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-filter-btn[aria-pressed="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-filter-btn:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}
+
+/* ---------------------------------------------------------------------------
+ * Commit list
+ * ------------------------------------------------------------------------- */
+.gm-commit-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  user-select: none;
+  outline: none;
+}
+
+.gm-commit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gm-commit-row:hover {
+  background: var(--oc-hover);
+}
+
+.gm-commit-row[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-commit-row__dot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  width: 12px;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row[aria-selected="true"] .gm-commit-row__dot {
+  color: var(--oc-primary);
+}
+
+.gm-commit-row__hash {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  font-family: var(--oc-mono);
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row__message {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-commit-row__date {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row__author {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row--no-date .gm-commit-row__author {
+  margin-left: auto;
+}
+
+/* Branch / tag reference chip. */
+.gm-ref {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.gm-ref--local {
+  background: color-mix(in srgb, var(--oc-warning) 18%, transparent);
+  color: var(--oc-warning);
+}
+
+.gm-ref--remote {
+  background: color-mix(in srgb, var(--oc-primary) 18%, transparent);
+  color: var(--oc-primary);
+}
+
+.gm-ref--tag {
+  background: color-mix(in srgb, var(--oc-success) 18%, transparent);
+  color: var(--oc-success);
+}
+
+/* ---------------------------------------------------------------------------
+ * Pane headers and commit detail
+ * ------------------------------------------------------------------------- */
+.gm-pane-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  font-size: 11px;
+  color: var(--oc-muted);
+  flex-shrink: 0;
+}
+
+.gm-pane-header__count {
+  color: var(--oc-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.gm-detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.gm-detail__field {
+  margin-bottom: 8px;
+}
+
+.gm-detail__label {
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-detail__value {
+  color: var(--oc-fg);
+  word-break: break-all;
+}
+
+.gm-detail__message {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--oc-border);
+  color: var(--oc-fg);
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Changed files and diff
+ * ------------------------------------------------------------------------- */
+.gm-diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gm-file-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.gm-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gm-file-item:hover {
+  background: var(--oc-hover);
+}
+
+.gm-file-item[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+/* Status letter (A/M/D/R) doubles as the file's change kind. */
+.gm-file-item__status {
+  flex: 0 0 auto;
+  width: 12px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.gm-file-item__status[data-kind="A"] {
+  color: var(--oc-success);
+}
+
+.gm-file-item__status[data-kind="M"] {
+  color: var(--oc-warning);
+}
+
+.gm-file-item__status[data-kind="D"] {
+  color: var(--oc-error);
+}
+
+.gm-file-item__status[data-kind="R"] {
+  color: var(--oc-primary);
+}
+
+.gm-file-item__path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-file-item__add {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--oc-success);
+}
+
+.gm-file-item__del {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--oc-error);
+}
+
+.gm-diff__preview {
+  height: var(--gm-preview-h, 120px);
+  min-height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gm-diff__file {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-diff__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--oc-mono);
+  font-size: 12px;
+}
+
+.gm-diff__line {
+  display: flex;
+  line-height: 1.45;
+}
+
+.gm-diff__line[data-type="add"] {
+  background: color-mix(in srgb, var(--oc-success) 16%, transparent);
+}
+
+.gm-diff__line[data-type="delete"] {
+  background: color-mix(in srgb, var(--oc-error) 16%, transparent);
+}
+
+.gm-diff__num {
+  flex: 0 0 auto;
+  width: 34px;
+  padding: 0 4px;
+  text-align: right;
+  color: var(--oc-muted);
+  user-select: none;
+}
+
+.gm-diff__sign {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+  user-select: none;
+}
+
+.gm-diff__line[data-type="add"] .gm-diff__sign {
+  color: var(--oc-success);
+}
+
+.gm-diff__line[data-type="delete"] .gm-diff__sign {
+  color: var(--oc-error);
+}
+
+.gm-diff__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 4px;
+  white-space: pre;
+}
+
+/* Syntax tokens: colours come from the host's ready.theme.tokens. */
+.gm-tok--kw {
+  color: var(--oc-syntax-keyword, var(--oc-fg));
+}
+
+.gm-tok--str {
+  color: var(--oc-syntax-string, var(--oc-success));
+}
+
+.gm-tok--num {
+  color: var(--oc-syntax-number, var(--oc-warning));
+}
+
+.gm-tok--fn {
+  color: var(--oc-syntax-function, var(--oc-primary));
+}
+
+.gm-tok--type {
+  color: var(--oc-syntax-type, var(--oc-info));
+}
+
+.gm-tok--com {
+  color: var(--oc-syntax-comment, var(--oc-muted));
+  font-style: italic;
+}
+
+.gm-tok--op {
+  color: var(--oc-syntax-operator, var(--oc-muted));
+}
+
+/* ---------------------------------------------------------------------------
+ * Popups, menus and dialogs
+ * Shared by the bespoke chrome the SDK kit does not cover: right-click
+ * context menus, the settings menu, filter dropdowns and modal dialogs.
+ * Coordinates and sizes computed at runtime stay inline.
+ * ------------------------------------------------------------------------- */
+.gm-popup {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--oc-elevated);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+  color: var(--oc-fg);
+  font-size: 12px;
+}
+
+.gm-popup__sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--oc-border);
+}
+
+.gm-popup__group {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--oc-muted);
+  cursor: default;
+}
+
+.gm-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: calc(var(--oc-radius) - 3px);
+  font-size: 12px;
+  color: var(--oc-fg);
+  cursor: pointer;
+}
+
+.gm-menu-item:hover {
+  background: var(--oc-hover);
+}
+
+.gm-menu-item[data-disabled="true"] {
+  color: var(--oc-muted);
+  cursor: default;
+}
+
+.gm-menu-item[data-disabled="true"]:hover {
+  background: transparent;
+}
+
+.gm-menu-item--destructive {
+  color: var(--oc-error);
+}
+
+.gm-menu-item__check {
+  flex: 0 0 12px;
+  width: 12px;
+  color: var(--oc-success);
+}
+
+.gm-menu-item__hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+/* Modal dialogs. */
+.gm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.gm-dialog {
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--oc-elevated);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.35);
+  color: var(--oc-fg);
+}
+
+.gm-dialog--wide {
+  width: 360px;
+}
+
+.gm-dialog__title {
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gm-dialog__hint {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--oc-muted);
+  word-break: break-all;
+}
+
+.gm-dialog__field {
+  margin-bottom: 10px;
+}
+
+.gm-dialog__label {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-dialog__error {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--oc-error);
+}
+
+.gm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gm-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gm-check input {
+  margin: 0;
+  accent-color: var(--oc-primary);
+}
+
+.gm-textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  padding: 8px;
+  border: 1px solid var(--oc-border);
+  border-radius: calc(var(--oc-radius) - 2px);
+  background: var(--oc-bg);
+  color: var(--oc-fg);
+  font-family: var(--oc-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+  outline: none;
+}
+
+.gm-textarea:focus {
+  border-color: var(--oc-focus);
+}
+
+/* Indented path/checkbox tree used by the path filter dialog. */
+.gm-tree {
+  max-height: 220px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--oc-border);
+  border-radius: calc(var(--oc-radius) - 2px);
+}
+
+.gm-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.gm-tree-row:hover {
+  background: var(--oc-hover);
+}
+
+.gm-tree-toggle {
+  flex: 0 0 12px;
+  width: 12px;
+  font-size: 9px;
+  text-align: center;
+  user-select: none;
+  color: var(--oc-muted);
+  cursor: pointer;
+}
+
+.gm-tree-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.gm-tree-label__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Branch-deleted notification card
+ * ------------------------------------------------------------------------- */
+.gm-notify {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1100;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: var(--oc-elevated);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+  color: var(--oc-fg);
+  font-size: 12px;
+}
+
+.gm-notify__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.gm-notify__action {
+  color: var(--oc-primary);
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.gm-notify__action:hover {
+  text-decoration: underline;
+}
+
+.gm-notify__action[data-busy="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Console panel
+ * ------------------------------------------------------------------------- */
+.gm-console {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.gm-console__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-console__spacer {
+  flex: 1 1 auto;
+}
+
+.gm-console__body {
+  flex: 1 1 auto;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.gm-console__list {
+  width: 320px;
+  min-width: 220px;
+  overflow-y: auto;
+  border-right: 1px solid var(--oc-border);
+}
+
+.gm-console__output {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  padding: 6px 8px;
+  font-family: var(--oc-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.gm-console__empty {
+  padding: 12px 8px;
+  color: var(--oc-muted);
+  font-size: 11px;
+}
+
+.gm-console__row {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.gm-console__row:hover {
+  background: var(--oc-hover);
+}
+
+.gm-console__row[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-console__cmd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-console__meta {
+  margin-top: 2px;
+  color: var(--oc-muted);
+}
+
+/* ---------------------------------------------------------------------------
+ * Worktrees panel
+ * ------------------------------------------------------------------------- */
+.gm-wt {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.gm-wt__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.gm-wt__count {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-wt__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gm-wt__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  font-size: 11px;
+}
+
+.gm-wt__branch {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.gm-wt__branch[data-current="true"] {
+  background: color-mix(in srgb, var(--oc-primary) 18%, transparent);
+  color: var(--oc-primary);
+}
+
+.gm-wt__branch[data-current="false"] {
+  background: color-mix(in srgb, var(--oc-fg) 8%, transparent);
+  color: var(--oc-muted);
+}
+
+.gm-wt__path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-wt__badge--main {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--oc-primary);
+}
+
+.gm-wt__badge--lock {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--oc-warning);
+}
+
+.gm-wt__empty {
+  padding: 12px 8px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-wt__error {
+  padding: 12px 8px;
+  font-size: 11px;
+  color: var(--oc-error);
+}
+
+/* Compact variant for the 20px rows inside bottom panels. */
+.gm-btn--small {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.gm-console__cmd[data-state="error"] {
+  color: var(--oc-error);
+}
+
+/* ---------------------------------------------------------------------------
+ * Compare branches view
+ * A large modal: shared commit-row and diff classes carry the lists and diffs.
+ * ------------------------------------------------------------------------- */
+.gm-compare {
+  display: flex;
+  flex-direction: column;
+  width: 1080px;
+  max-width: 96vw;
+  height: 640px;
+  max-height: 90vh;
+  overflow: hidden;
+  background: var(--oc-elevated);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.35);
+  color: var(--oc-fg);
+}
+
+.gm-compare__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.gm-compare__icon {
+  display: flex;
+  align-items: center;
+  color: var(--oc-muted);
+}
+
+.gm-compare__branch {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-compare__with {
+  font-size: 12px;
+  color: var(--oc-muted);
+}
+
+.gm-compare__summary {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-compare__spacer {
+  flex: 1 1 auto;
+}
+
+.gm-compare__close {
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--oc-muted);
+  cursor: pointer;
+}
+
+.gm-compare__close:hover {
+  color: var(--oc-fg);
+}
+
+.gm-compare__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gm-compare__lists {
+  display: flex;
+  flex-direction: column;
+  width: 56%;
+  overflow: hidden;
+  border-right: 1px solid var(--oc-border);
+}
+
+.gm-compare__section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.gm-compare__section-title {
+  font-size: 11px;
+  color: var(--oc-fg);
+}
+
+.gm-compare__section-count {
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-compare__list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gm-compare__list--divided {
+  border-bottom: 1px solid var(--oc-border);
+}
+
+.gm-compare__commits {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gm-compare__loading {
+  padding: 12px 8px;
+  font-size: 12px;
+  color: var(--oc-muted);
+  text-align: center;
+}
+
+.gm-compare__detail-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gm-compare__detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.gm-compare__head-block {
+  margin-bottom: 8px;
+}
+
+.gm-compare__msg {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--oc-fg);
+  word-break: break-word;
+}
+
+.gm-compare__field {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.gm-compare__field-label {
+  flex: 0 0 auto;
+  width: 48px;
+  color: var(--oc-muted);
+}
+
+.gm-compare__field-value {
+  color: var(--oc-fg);
+  word-break: break-all;
+}
+
+.gm-compare__file-title {
+  margin: 8px 0 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--oc-border);
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-compare__file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.gm-compare__file:hover {
+  background: var(--oc-hover);
+}
+
+.gm-compare__file[aria-expanded="true"] {
+  background: var(--oc-selection);
+}
+
+.gm-compare__file-caret {
+  flex: 0 0 auto;
+  width: 10px;
+  color: var(--oc-muted);
+}
+
+.gm-compare__file-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-compare__file-add {
+  flex: 0 0 auto;
+  color: var(--oc-success);
+}
+
+.gm-compare__file-del {
+  flex: 0 0 auto;
+  color: var(--oc-error);
+}
+
+.gm-compare__file-diff {
+  margin: 2px 0 6px 14px;
+  border: 1px solid var(--oc-border);
+  border-radius: 3px;
+  overflow-x: auto;
+  font-family: var(--oc-mono);
+  font-size: 11px;
+}
+
+.gm-compare__parents-title {
+  margin: 8px 0 2px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-compare__parents {
+  font-family: var(--oc-mono);
+  font-size: 11px;
+  color: var(--oc-muted);
+  word-break: break-all;
+}
+
+.gm-compare__error {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--oc-error);
+}
+
+/* Sort-mode chip shown in the toolbar. */
+.gm-filter-tag-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.gm-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--oc-warning) 18%, transparent);
+  font-size: 11px;
+}
+
+.gm-filter-tag__label {
+  color: var(--oc-warning);
+}
+
+.gm-filter-tag__clear {
+  font-size: 10px;
+  color: var(--oc-muted);
+  cursor: pointer;
+}
+
+/* Wider menus (commit and file context menus). */
+.gm-popup--wide {
+  min-width: 200px;
+}
+
+/* Destructive confirmation: a filled red button, not the outlined variant. */
+.gm-btn--destructive-filled {
+  background: var(--oc-error);
+  border-color: var(--oc-error);
+  color: var(--oc-primary-fg);
+}
+
+.gm-btn--destructive-filled:hover {
+  background: color-mix(in srgb, var(--oc-error) 88%, var(--oc-fg));
+}
+
+/* Radio/checkbox choice list inside a dialog. */
+.gm-dialog__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+/* Dialog body message (confirm / force-delete). */
+.gm-dialog__message {
+  margin-bottom: 16px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--oc-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Extra-wide cards for multi-line editors. */
+.gm-dialog--xwide {
+  width: 420px;
+}
+
+/* In-tree placeholders keep their own padding, away from the dialog rhythm. */
+.gm-tree-placeholder {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--oc-muted);
+}
+
+.gm-tree-error {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--oc-error);
+}
