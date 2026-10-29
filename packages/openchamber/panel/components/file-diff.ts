@@ -9,6 +9,8 @@ import { ServiceClient } from '../service';
 import { showFileContextMenu } from './file-context-menu';
 import { t } from '../i18n';
 import { highlightLine } from '../syntax';
+import { createSplitter } from './splitter';
+import { commitLayout, getLayout, setLayoutSize } from '../layout';
 
 export function createFileDiffPanel(
   container: HTMLElement,
@@ -110,6 +112,20 @@ export function createFileDiffPanel(
     previewContainer = html`
       <div class="gm-diff__preview"></div>
     `;
+
+    // The preview keeps its own height; dragging the divider trades space with
+    // the file list above it.
+    const previewSplitter = createSplitter({
+      axis: 'y',
+      sign: -1,
+      value: () => Math.round(previewContainer?.getBoundingClientRect().height ?? 0) || getLayout().filesPreview,
+      min: () => 40,
+      max: () => Math.max(40, splitArea.clientHeight - 65),
+      onResize: (px) => { setLayoutSize('filesPreview', px); },
+      onCommit: () => { commitLayout(); },
+    });
+    splitArea.appendChild(previewSplitter);
+
     splitArea.appendChild(previewContainer);
 
     container.appendChild(splitArea);

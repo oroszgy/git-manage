@@ -105,8 +105,8 @@ textarea {
 .gm-shell {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -120,27 +120,25 @@ textarea {
 }
 
 .gm-branches {
-  /* Fits the title plus eight 24px header actions without truncating either. */
-  width: 280px;
-  min-width: 280px;
+  /* Fits the title plus eight 22px header actions at the minimum width. */
+  width: var(--gm-branches-w, 280px);
+  min-width: 220px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--oc-border);
 }
 
 .gm-main {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--oc-border);
 }
 
 .gm-side {
-  width: 300px;
-  min-width: 200px;
+  width: var(--gm-side-w, 300px);
+  min-width: 220px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -156,19 +154,87 @@ textarea {
 }
 
 .gm-pane--stacked {
-  border-bottom: 1px solid var(--oc-border);
+  flex: 0 1 var(--gm-files-pane-h, 50%);
 }
 
 .gm-bottom {
   display: none;
-  height: 220px;
+  height: var(--gm-bottom-h, 220px);
   min-height: 120px;
-  border-top: 1px solid var(--oc-border);
+  flex-shrink: 0;
   overflow: hidden;
 }
 
 .gm-bottom[data-open="true"] {
   display: block;
+}
+
+/* ---------------------------------------------------------------------------
+ * Draggable dividers
+ * A 5px hit area painting a single 1px line; the line turns primary while the
+ * pointer is over it, it has focus, or it is being dragged.
+ * ------------------------------------------------------------------------- */
+.gm-splitter {
+  position: relative;
+  flex: 0 0 5px;
+  align-self: stretch;
+  z-index: 3;
+  background: transparent;
+  touch-action: none;
+}
+
+.gm-splitter[hidden] {
+  display: none;
+}
+
+.gm-splitter--x {
+  cursor: col-resize;
+}
+
+.gm-splitter--y {
+  cursor: row-resize;
+}
+
+.gm-splitter::before {
+  content: "";
+  position: absolute;
+  background: var(--oc-border);
+}
+
+.gm-splitter--x::before {
+  inset: 0 auto 0 2px;
+  width: 1px;
+}
+
+.gm-splitter--y::before {
+  inset: 2px 0 auto 0;
+  height: 1px;
+}
+
+.gm-splitter:hover::before,
+.gm-splitter:focus-visible::before,
+.gm-splitter--active::before {
+  background: var(--oc-primary);
+}
+
+.gm-splitter:focus-visible {
+  outline: 1px solid var(--oc-focus);
+  outline-offset: -1px;
+}
+
+/* Keep the resize cursor while the pointer leaves the 5px handle. */
+html.gm-splitter-dragging {
+  user-select: none;
+}
+
+html.gm-splitter-dragging--x,
+html.gm-splitter-dragging--x * {
+  cursor: col-resize !important;
+}
+
+html.gm-splitter-dragging--y,
+html.gm-splitter-dragging--y * {
+  cursor: row-resize !important;
 }
 
 /* Top progress bar: height 0 at rest, 2px while a fetch is running. */
@@ -797,7 +863,6 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  border-bottom: 1px solid var(--oc-border);
 }
 
 .gm-file-item {
@@ -867,8 +932,9 @@ textarea {
 }
 
 .gm-diff__preview {
-  height: 120px;
-  min-height: 60px;
+  height: var(--gm-preview-h, 120px);
+  min-height: 40px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;

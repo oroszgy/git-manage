@@ -29,14 +29,19 @@ function getTitleCount(container: HTMLElement): string {
   return getTitle(container).querySelector('span')?.textContent ?? '';
 }
 
-/** 获取文件列表容器（splitArea 第一个子元素） */
-function getListContainer(container: HTMLElement): HTMLElement {
-  return (container.children[1] as HTMLElement).children[0] as HTMLElement;
+/** 获取分割区（标题之后的容器） */
+function getSplitArea(container: HTMLElement): HTMLElement {
+  return container.children[1] as HTMLElement;
 }
 
-/** 获取差异预览容器（splitArea 第二个子元素） */
+/** 获取文件列表容器 */
+function getListContainer(container: HTMLElement): HTMLElement {
+  return getSplitArea(container).querySelector('.gm-file-list') as HTMLElement;
+}
+
+/** 获取差异预览容器 */
 function getPreviewContainer(container: HTMLElement): HTMLElement {
-  return (container.children[1] as HTMLElement).children[1] as HTMLElement;
+  return getSplitArea(container).querySelector('.gm-diff__preview') as HTMLElement;
 }
 
 /** 创建面板并登记清理 */
@@ -316,6 +321,22 @@ describe('file-diff', () => {
       // 清空后再插入：只应有标题、分割区两个节点，不应残留占位文本节点
       expect(container.childNodes.length).toBe(2);
       expect(container.firstChild).toBe(getTitle(container));
+    });
+
+    it('文件列表与预览之间应插入可拖动的水平分隔条', () => {
+      const { container } = createPanel();
+      const splitArea = getSplitArea(container);
+      const splitter = splitArea.querySelector('.gm-splitter') as HTMLElement;
+
+      expect(splitter).toBeTruthy();
+      expect(splitter.getAttribute('role')).toBe('separator');
+      expect(splitter.getAttribute('aria-orientation')).toBe('horizontal');
+      expect(splitter.getAttribute('aria-label')).toBeTruthy();
+      expect(splitter.tabIndex).toBe(0);
+      // 列表 → 分隔条 → 预览
+      expect(splitArea.children[0]).toBe(getListContainer(container));
+      expect(splitArea.children[1]).toBe(splitter);
+      expect(splitArea.children[2]).toBe(getPreviewContainer(container));
     });
 
     it('点击文件后预览区只应保留标题与差异内容两个节点', () => {

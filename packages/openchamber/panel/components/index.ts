@@ -10,6 +10,8 @@ export { createConsolePanel } from './console-panel';
 export type { ConsolePanelHandle } from './console-panel';
 export { createWorktreesPanel } from './worktrees-panel';
 export type { WorktreesPanelHandle, WorktreeInfo } from './worktrees-panel';
+export { createSplitter } from './splitter';
+export type { SplitterOptions } from './splitter';
 export type { BranchActions } from './branch-panel';
 export { showCompareBranchesView } from './compare-view';
 export type { CompareViewHandle } from './compare-view';

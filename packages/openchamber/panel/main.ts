@@ -33,11 +33,13 @@ import {
   createCommitDetailPanel,
   createConsolePanel,
   createWorktreesPanel,
+  createSplitter,
   hideContextMenu,
   showCompareBranchesView,
 } from './components';
 import { showCreateBranchDialog } from './components/dialogs';
 import { filterCommits } from './components/commit-list';
+import { applyLayout, bindLayoutStorage, commitLayout, getLayout, loadLayout, setLayoutSize } from './layout';
 
 const root = document.querySelector("#root")!;
 const service = createServiceClient(host);
@@ -131,9 +133,28 @@ async function render(): Promise<void> {
     branchPanel.hidden = getState().branchPanelHidden;
     contentArea.appendChild(branchPanel);
 
+    // Drag the branch column wider or narrower; the commit list takes the rest.
+    const branchesSplitter = createSplitter({
+      axis: 'x',
+      sign: 1,
+      value: () => Math.round(branchPanel.getBoundingClientRect().width) || getLayout().branches,
+      min: () => 220,
+      max: () => Math.max(
+        220,
+        contentArea.clientWidth
+          - (Math.round(detailPanel.getBoundingClientRect().width) || getLayout().side)
+          - 210,
+      ),
+      onResize: (px) => { setLayoutSize('branches', px); },
+      onCommit: () => { commitLayout(); },
+    });
+    branchesSplitter.hidden = branchPanel.hidden;
+    contentArea.appendChild(branchesSplitter);
+
     const toggleBranchPanel = (): void => {
       setState(s => { s.branchPanelHidden = !s.branchPanelHidden; });
       branchPanel.hidden = getState().branchPanelHidden;
+      branchesSplitter.hidden = branchPanel.hidden;
     };
 
     // B region: commit list (middle, takes the remaining width)
@@ -297,10 +318,27 @@ async function render(): Promise<void> {
     );
     disposables.push(branchPanelComp);
 
-    // C 区域: 右侧详情面板 (固定宽度 300px)
+    // C 区域: 右侧详情面板（宽度可拖动，默认 300px）
     const detailPanel = html`
       <div class="gm-side"></div>
     `;
+
+    // Drag the details column wider or narrower; the commit list takes the rest.
+    const sideSplitter = createSplitter({
+      axis: 'x',
+      sign: -1,
+      value: () => Math.round(detailPanel.getBoundingClientRect().width) || getLayout().side,
+      min: () => 220,
+      max: () => Math.max(
+        220,
+        contentArea.clientWidth
+          - (Math.round(branchPanel.getBoundingClientRect().width) || getLayout().branches)
+          - 210,
+      ),
+      onResize: (px) => { setLayoutSize('side', px); },
+      onCommit: () => { commitLayout(); },
+    });
+    contentArea.appendChild(sideSplitter);
     contentArea.appendChild(detailPanel);
 
     // C1: 变更文件 (上半部分)
@@ -311,6 +349,20 @@ async function render(): Promise<void> {
 
     const fileDiffComp = createFileDiffPanel(fileDiffPanel, service, getDir());
     disposables.push(fileDiffComp);
+
+    // Drag between changed files and commit details; each keeps 80px minimum.
+    const detailSplitter = createSplitter({
+      axis: 'y',
+      sign: 1,
+      value: () => Math.round(fileDiffPanel.getBoundingClientRect().height)
+        || getLayout().filesPane
+        || 240,
+      min: () => 80,
+      max: () => Math.max(80, detailPanel.clientHeight - 80 - 5),
+      onResize: (px) => { setLayoutSize('filesPane', px); },
+      onCommit: () => { commitLayout(); },
+    });
+    detailPanel.appendChild(detailSplitter);
 
     // C2: 提交详情 (下半部分)
     const commitDetailPanel = html`
@@ -329,6 +381,19 @@ async function render(): Promise<void> {
       <div data-bottom-panel class="gm-bottom"></div>
     `;
     root.appendChild(bottomPanel);
+
+    // Drag the console/worktrees area taller. Hidden while the Git tab is active.
+    const bottomSplitter = createSplitter({
+      axis: 'y',
+      sign: -1,
+      value: () => Math.round(bottomPanel.getBoundingClientRect().height) || getLayout().bottom,
+      min: () => 120,
+      max: () => Math.max(120, root.clientHeight - 180),
+      onResize: (px) => { setLayoutSize('bottom', px); },
+      onCommit: () => { commitLayout(); },
+    });
+    bottomSplitter.hidden = true;
+    root.insertBefore(bottomSplitter, bottomPanel);
 
     let bottomHandle: { dispose: () => void } | null = null;
     /** 当前激活的底部页签（模块级，跨重建保留） */
@@ -353,11 +418,14 @@ async function render(): Promise<void> {
 
       if (activeTab === 'git') {
         bottomPanel.dataset.open = 'false';
+        bottomSplitter.hidden = true;
       } else if (activeTab === 'console') {
         bottomPanel.dataset.open = 'true';
+        bottomSplitter.hidden = false;
         bottomHandle = createConsolePanel(bottomPanel, service, getDir());
       } else {
         bottomPanel.dataset.open = 'true';
+        bottomSplitter.hidden = false;
         bottomHandle = createWorktreesPanel(bottomPanel, service, getDir(), host);
       }
       updateTabStyles();
@@ -803,10 +871,14 @@ async function init(): Promise<void> {
   // Host theme tokens live on <html>; applying them also reveals the document
   // (see the data-oc-theme gate in styles.css).
   const theme = installHostTheme(document.documentElement);
+  // Divider positions come back from the host's extension storage.
+  bindLayoutStorage(host.storage);
+  applyLayout();
   // Menu language follows the host setting.
   host.onReady((context) => {
     theme.apply(context);
     setLocale(context.locale);
+    void loadLayout();
   });
   host.onDirectory((dir) => {
     console.debug(JSON.stringify({
