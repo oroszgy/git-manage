@@ -2,6 +2,12 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式约定，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。本文件基于本仓库提交历史整理。
 
+## [0.0.8] - 2026-10-29
+
+### Fixed
+
+- The panel renders again after 0.0.7: a divider read the details column before that pane existed, so the shell threw during startup and stayed blank
+
 ## [0.0.7] - 2026-10-29
 
 ### Added
