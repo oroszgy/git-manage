@@ -25,15 +25,28 @@ function log(msg) {
   console.log(`[${time}] [dev] ${msg}`);
 }
 
+/** Static panel assets that esbuild does not bundle: the HTML shell and its stylesheet. */
+const PANEL_ASSETS = ['panel/index.html', 'panel/styles.css'];
+
 /**
- * 把面板 HTML 复制到产物目录（HTML 不参与打包，需单独同步）
+ * Copy the panel's static assets into dist/ (they are not bundled).
  */
-async function copyPanelHtml() {
+async function copyPanelAssets() {
   await fs.mkdir(path.join(DIST, 'panel'), { recursive: true });
-  await fs.copyFile(
-    path.join(PKG_ROOT, 'panel/index.html'),
-    path.join(DIST, 'panel/index.html'),
-  );
+  for (const asset of PANEL_ASSETS) {
+    await fs.copyFile(path.join(PKG_ROOT, asset), path.join(DIST, 'panel', path.basename(asset)));
+  }
+}
+
+/** mtime of every static asset, keyed by source path. */
+async function assetMtimes() {
+  const times = new Map();
+  for (const asset of PANEL_ASSETS) {
+    try {
+      times.set(asset, (await fs.stat(path.join(PKG_ROOT, asset))).mtimeMs);
+    } catch { /* unreadable now, picked up on a later poll */ }
+  }
+  return times;
 }
 
 /**
@@ -68,7 +81,7 @@ function watch(entry, outfile, extraArgs) {
 async function main() {
   log('准备开发构建目录 dist/');
   await fs.mkdir(DIST, { recursive: true });
-  await copyPanelHtml();
+  await copyPanelAssets();
 
   log('启动面板监听（panel/main.ts → dist/panel/main.js）');
   const panel = watch('panel/main.ts', 'dist/panel/main.js', ['--format=iife', '--platform=browser']);
@@ -76,20 +89,21 @@ async function main() {
   log('启动服务监听（service/main.ts → dist/service/main.js）');
   const service = watch('service/main.ts', 'dist/service/main.js', ['--format=cjs', '--platform=node', '--target=node20']);
 
-  // HTML 变化不频繁，用轮询同步（避免额外依赖）
-  let htmlMtime = 0;
-  try {
-    htmlMtime = (await fs.stat(path.join(PKG_ROOT, 'panel/index.html'))).mtimeMs;
-  } catch { /* 首次读取失败时下方逻辑会在变化后补上 */ }
+  // HTML and CSS change rarely; poll for them instead of adding a watcher dependency.
+  let mtimes = await assetMtimes();
   const timer = setInterval(async () => {
     try {
-      const stat = await fs.stat(path.join(PKG_ROOT, 'panel/index.html'));
-      if (stat.mtimeMs !== htmlMtime) {
-        htmlMtime = stat.mtimeMs;
-        await copyPanelHtml();
-        log('已同步 panel/index.html');
+      const next = await assetMtimes();
+      let changed = false;
+      for (const [asset, mtime] of next) {
+        if (mtimes.get(asset) !== mtime) changed = true;
       }
-    } catch { /* 文件暂时不可读时忽略，下一轮重试 */ }
+      if (changed) {
+        mtimes = next;
+        await copyPanelAssets();
+        log(`已同步面板静态资源（${PANEL_ASSETS.map(a => path.basename(a)).join('、')}）`);
+      }
+    } catch { /* ignore a transient read failure and retry on the next tick */ }
   }, 1000);
 
   log('监听中，修改源码会自动重建。宿主按路径安装时请选择：');

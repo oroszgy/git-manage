@@ -1,0 +1,393 @@
+/*
+ * Panel stylesheet.
+ *
+ * Colours, fonts, radii and interaction states come from the host theme, which
+ * the guest applies onto <html> with `applyHostReady` (see theme.ts): the SDK
+ * writes --oc-* there on every `ready`. Nothing here hardcodes a palette, so a
+ * light host theme restyles the whole panel without a rebuild.
+ *
+ * Rules are class based on purpose: the host appends its own look CSS after
+ * this document, so an equal-specificity override in the head would lose.
+ * Inline styles remain only for values computed at runtime — popup
+ * coordinates, graph geometry and diff line data.
+ */
+
+/* ---------------------------------------------------------------------------
+ * First paint
+ * The frame is painted before the host answers `ready`, so no token exists yet.
+ * Stay invisible until the theme lands; if the host never answers, the fallback
+ * palette below paints a usable dark panel instead of a white void.
+ * ------------------------------------------------------------------------- */
+html {
+  visibility: hidden;
+}
+
+html[data-oc-theme],
+html[data-oc-fallback] {
+  visibility: visible;
+}
+
+html[data-oc-fallback] {
+  color-scheme: dark;
+  --oc-bg: #17181b;
+  --oc-elevated: #1f2126;
+  --oc-muted-surface: #1c1d21;
+  --oc-subtle: #23252a;
+  --oc-fg: #e7e8ea;
+  --oc-elevated-fg: #f1f2f4;
+  --oc-muted: #9aa1aa;
+  --oc-border: #2f3238;
+  --oc-hover: rgb(255 255 255 / 0.06);
+  --oc-active: rgb(255 255 255 / 0.1);
+  --oc-selection: rgb(59 130 246 / 0.2);
+  --oc-selection-fg: #eaf1ff;
+  --oc-focus: #3b82f6;
+  --oc-primary: #3b82f6;
+  --oc-primary-fg: #ffffff;
+  --oc-success: #4ade80;
+  --oc-warning: #fbbf24;
+  --oc-error: #f87171;
+  --oc-info: #38bdf8;
+  --oc-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --oc-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --oc-radius: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * IDE density is deliberate: 12px base and fixed px rows, so row count per
+ * screen does not move with the host's interface size.
+ * ------------------------------------------------------------------------- */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--oc-bg);
+  color: var(--oc-fg);
+  font-family: var(--oc-font);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shell
+ * ------------------------------------------------------------------------- */
+.gm-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gm-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.gm-branches {
+  width: 220px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--oc-border);
+}
+
+.gm-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--oc-border);
+}
+
+.gm-side {
+  width: 300px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* A vertical pane inside a column: half of .gm-side, whole of .gm-main. */
+.gm-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gm-pane--stacked {
+  border-bottom: 1px solid var(--oc-border);
+}
+
+.gm-bottom {
+  display: none;
+  height: 220px;
+  min-height: 120px;
+  border-top: 1px solid var(--oc-border);
+  overflow: hidden;
+}
+
+.gm-bottom[data-open="true"] {
+  display: block;
+}
+
+/* Top progress bar: height 0 at rest, 2px while a fetch is running. */
+.gm-progress {
+  height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  transition: height 0.15s;
+}
+
+.gm-progress__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 30%;
+  background: var(--oc-primary);
+  opacity: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bottom tabs
+ * ------------------------------------------------------------------------- */
+.gm-tabbar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--oc-border);
+}
+
+.gm-tabbar__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+}
+
+.gm-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: calc(var(--oc-radius) - 2px);
+  border: 1px solid transparent;
+  color: var(--oc-muted);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gm-tab:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-tab[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-tab:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared primitives
+ * Thin wrappers over the host's interaction tokens, used by the bespoke chrome
+ * the SDK kit does not cover (rows, graph, trees, menus, dialogs).
+ * ------------------------------------------------------------------------- */
+.gm-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: calc(var(--oc-radius) - 2px);
+  background: transparent;
+  color: var(--oc-muted);
+  cursor: pointer;
+}
+
+.gm-icon-btn:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-icon-btn:active {
+  background: var(--oc-active);
+}
+
+.gm-icon-btn[aria-pressed="true"],
+.gm-icon-btn--active {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-icon-btn[disabled],
+.gm-icon-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.gm-icon-btn:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}
+
+.gm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--oc-border);
+  border-radius: calc(var(--oc-radius) - 2px);
+  background: var(--oc-elevated);
+  color: var(--oc-fg);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.gm-btn:hover {
+  background: var(--oc-hover);
+}
+
+.gm-btn:active {
+  background: var(--oc-active);
+}
+
+.gm-btn--primary {
+  background: var(--oc-primary);
+  border-color: var(--oc-primary);
+  color: var(--oc-primary-fg);
+}
+
+.gm-btn--primary:hover {
+  background: color-mix(in srgb, var(--oc-primary) 88%, var(--oc-fg));
+}
+
+.gm-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--oc-muted);
+}
+
+.gm-btn--ghost:hover {
+  background: var(--oc-hover);
+  color: var(--oc-fg);
+}
+
+.gm-btn--destructive {
+  color: var(--oc-error);
+}
+
+.gm-btn[disabled],
+.gm-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.gm-btn:focus-visible {
+  outline: none;
+  border-color: var(--oc-focus);
+}
+
+/* A text field drawn by the panel (menus, dialogs, filters). */
+.gm-input {
+  display: block;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--oc-border);
+  border-radius: calc(var(--oc-radius) - 2px);
+  background: var(--oc-bg);
+  color: var(--oc-fg);
+  font-size: 12px;
+  outline: none;
+}
+
+.gm-input::placeholder {
+  color: var(--oc-muted);
+}
+
+.gm-input:focus {
+  border-color: var(--oc-focus);
+}
+
+.gm-input[data-invalid="true"] {
+  border-color: var(--oc-error);
+}
+
+.gm-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+}
+
+.gm-mono {
+  font-family: var(--oc-mono);
+}
+
+.gm-muted {
+  color: var(--oc-muted);
+}
+
+.gm-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--oc-muted);
+  font-size: 12px;
+}
+
+/* Scrollbars are the host's: it injects GUEST_SCROLLBAR_CSS (overlay, hidden
+ * at rest) into every served document, so the panel must not style them. */
