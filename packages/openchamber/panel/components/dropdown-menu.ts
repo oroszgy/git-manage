@@ -90,45 +90,29 @@ function createRow(item: DropdownMenuItem): HTMLElement {
   row.dataset.kind = kind;
   row.dataset.id = item.id;
 
-  // 分隔线：横线样式（与 settings-menu 一致）
+  // Separator: a hairline, unpadded row.
   if (kind === 'separator') {
-    row.style.height = '1px';
-    row.style.background = '#444';
-    row.style.margin = '4px 0';
+    row.classList.add('gm-popup__sep');
     return row;
   }
 
-  // 分组标题：弱化样式、默认光标，不参与点击与悬停高亮
+  // Group label: muted, no cursor, no hover.
   if (kind === 'group') {
-    row.style.padding = '6px 12px';
-    row.style.fontSize = '11px';
-    row.style.color = '#888';
-    row.style.cursor = 'default';
+    row.classList.add('gm-popup__group');
     row.textContent = item.label;
     return row;
   }
 
-  // 可选项：勾号槽 + 文案（布局与 settings-menu 的开关项一致）
-  row.style.padding = '6px 12px';
-  row.style.fontSize = '12px';
-  row.style.display = 'flex';
-  row.style.alignItems = 'center';
-  row.style.gap = '6px';
-
+  // Selectable row: check slot + label.
+  row.classList.add('gm-menu-item');
   if (item.disabled) {
     row.dataset.disabled = 'true';
-    row.style.color = '#666';
-    row.style.cursor = 'default';
   } else {
-    row.style.color = '#ccc';
-    row.style.cursor = 'pointer';
+    row.dataset.disabled = 'false';
   }
 
   const check = document.createElement('span');
-  check.className = 'git-dropdown-check';
-  check.style.width = '12px';
-  check.style.flex = '0 0 12px';
-  check.style.color = '#4caf50';
+  check.className = 'git-dropdown-check gm-menu-item__check';
   check.textContent = item.checked ? '✓' : '';
 
   // textContent 赋值保证 label 中的 HTML 字符不被解析（防注入）
@@ -168,20 +152,6 @@ function computePosition(
 }
 
 /**
- * 判断行是否为可交互的可选项（非 disabled 的 item）
- * @param row 行元素（可为 null）
- * @returns 是否可交互
- */
-function isSelectableRow(row: HTMLElement | null): boolean {
-  return (
-    row !== null &&
-    row.parentElement !== null &&
-    row.dataset.kind === 'item' &&
-    row.dataset.disabled !== 'true'
-  );
-}
-
-/**
  * 在锚点元素下方弹出下拉菜单
  * 关闭时机：选中 item 后、点击菜单外部、再次点击同一锚点（toggle）、
  * Escape 键、调用返回的关闭函数；新弹出菜单会先关闭已有菜单（互斥）
@@ -207,17 +177,7 @@ export function showDropdownMenu(
 
   const menu = document.createElement('div');
   menu.id = 'git-dropdown-menu';
-  menu.style.position = 'fixed';
-  menu.style.background = '#2d2d2d';
-  menu.style.border = '1px solid #444';
-  menu.style.borderRadius = '4px';
-  menu.style.padding = '4px 0';
-  menu.style.zIndex = '1000';
-  menu.style.minWidth = '160px';
-  // 长列表（如分支很多）防溢出：限制高度并在菜单内部滚动
-  menu.style.maxHeight = '60vh';
-  menu.style.overflowY = 'auto';
-  menu.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.5)';
+  menu.className = 'gm-popup';
 
   for (const item of items) {
     menu.appendChild(createRow(item));
@@ -267,20 +227,7 @@ export function showDropdownMenu(
     closeMenu(instance, 'select');
   });
 
-  // 悬停高亮：仅未禁用的可选项响应（分组标题与分隔线无 hover）
-  menu.addEventListener('mouseenter', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div') as HTMLElement | null;
-    if (target && target.parentElement === menu && isSelectableRow(target)) {
-      target.style.background = '#3a3a3a';
-    }
-  }, true);
-
-  menu.addEventListener('mouseleave', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div') as HTMLElement | null;
-    if (target && target.parentElement === menu && isSelectableRow(target)) {
-      target.style.background = 'transparent';
-    }
-  }, true);
+  // Hover is a stylesheet state on .gm-menu-item; nothing to patch per row.
 
   // 点击菜单外部关闭；延迟注册避免打开菜单的那次点击立即关闭
   instance.outsideTimer = setTimeout(() => {

@@ -56,7 +56,7 @@ const TOKEN = new RegExp([
  * @returns HTML with `gm-tok--*` spans, always wrapped so callers can inject it
  */
 export function highlightLine(text: string): string {
-  if (!text) return '<span class="gm-line"></span>';
+  if (!text) return '<span></span>';
 
   let out = '';
   let last = 0;
@@ -100,5 +100,5 @@ export function highlightLine(text: string): string {
   if (last < text.length) {
     out += escapeHtml(text.slice(last));
   }
-  return `<span class="gm-line">${out}</span>`;
+  return `<span>${out}</span>`;
 }

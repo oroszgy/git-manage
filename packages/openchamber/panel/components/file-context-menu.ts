@@ -111,54 +111,30 @@ export function showFileContextMenu(
   ];
 
   const menu = html`
-    <div id="git-file-context-menu" style="
-      position: fixed;
-      left: ${e.clientX}px;
-      top: ${e.clientY}px;
-      background: #2d2d2d;
-      border: 1px solid #444;
-      border-radius: 4px;
-      padding: 4px 0;
-      z-index: 1000;
-      min-width: 200px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-    "></div>
+    <div id="git-file-context-menu" class="gm-popup gm-popup--wide"></div>
   `;
+  // 坐标在打开时按指针计算，属于运行时数据；外观全部来自 .gm-popup
+  menu.style.left = `${e.clientX}px`;
+  menu.style.top = `${e.clientY}px`;
 
   for (const item of items) {
     if ("type" in item && item.type === "separator") {
       const sep = document.createElement("div");
-      sep.style.height = "1px";
-      sep.style.background = "#444";
-      sep.style.margin = "4px 0";
+      sep.className = "gm-popup__sep";
       menu.appendChild(sep);
       continue;
     }
 
     const menuItem = item as MenuItem;
     const el = document.createElement("div");
+    el.className = menuItem.danger ? "gm-menu-item gm-menu-item--destructive" : "gm-menu-item";
+    el.dataset.disabled = "false";
     el.textContent = menuItem.label;
-    el.style.padding = "6px 12px";
-    el.style.cursor = "pointer";
-    el.style.fontSize = "12px";
-    el.style.color = menuItem.danger ? "#f44336" : "#ccc";
 
     menu.appendChild(el);
   }
 
-  menu.addEventListener('mouseenter', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu) {
-      target.style.background = "#3a3a3a";
-    }
-  }, true);
-
-  menu.addEventListener('mouseleave', (ev) => {
-    const target = (ev.target as HTMLElement).closest('div');
-    if (target && target.parentElement === menu) {
-      target.style.background = "transparent";
-    }
-  }, true);
+  // 悬停高亮由样式表 .gm-menu-item:hover 承担
 
   menu.addEventListener('click', async (ev) => {
     const target = (ev.target as HTMLElement).closest('div');
@@ -166,10 +142,9 @@ export function showFileContextMenu(
 
     const label = target.textContent;
     const item = items.find(i => !("type" in i) && (i as MenuItem).label === label) as MenuItem | undefined;
-    if (item) {
-      hideFileContextMenu();
-      await item.action();
-    }
+    if (!item) return;
+    hideFileContextMenu();
+    await item.action();
   });
 
   document.body.appendChild(menu);

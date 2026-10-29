@@ -130,20 +130,20 @@ describe('compare-view', () => {
     (document.querySelector('#compare-left-list [data-hash]') as HTMLElement).click();
     await flush();
 
-    // 未点击文件时 diff 区隐藏
+    // The diff area stays hidden (hidden attribute) until the file is clicked.
     const content = document.querySelector('#compare-detail [data-compare-diff="src/a.ts"]') as HTMLElement;
-    expect(content.style.display).toBe('none');
+    expect(content.hidden).toBe(true);
 
     (document.querySelector('#compare-detail [data-compare-path="src/a.ts"]') as HTMLElement).click();
 
-    expect(content.style.display).toBe('block');
+    expect(content.hidden).toBe(false);
     expect(content.textContent).toContain('const a = 1;');
     expect(content.textContent).toContain('const b = 2;');
     expect(content.textContent).toContain('const b = 3;');
 
     // 再次点击收起
     (document.querySelector('#compare-detail [data-compare-path="src/a.ts"]') as HTMLElement).click();
-    expect(content.style.display).toBe('none');
+    expect(content.hidden).toBe(true);
   });
 
   it('提交详情加载失败时应该在右侧显示错误', async () => {

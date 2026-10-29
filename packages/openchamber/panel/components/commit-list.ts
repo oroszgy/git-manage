@@ -163,7 +163,7 @@ export function createCommitListPanel(
 
   /**
    * 按当前状态刷新工具栏 6 个过滤按钮的激活样式
-   * 激活：background #1a3a5a、border #2a5a8a、color #cfe8ff；未激活恢复 #333/#444/#888
+   * 激活态只切换 aria-pressed，配色由 styles.css 承担
    * 映射：btn-regex ← searchRegex；btn-case ← searchCaseSensitive；btn-filter-branch ← logBranch；
    * btn-filter-user ← filterAuthor；btn-filter-date ← filterDateFrom/filterDateTo 任一非空；
    * btn-filter-path ← filterPaths 非空（多选路径数组，空数组 = 不过滤）
@@ -564,14 +564,14 @@ export function createCommitListPanel(
     };
 
     const sortTag = html`
-      <span style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; background: #3a2e1a; border-radius: 3px; font-size: 11px;">
-        <span style="color: #e8a838;">${t(sortLabelKey[state.sortMode])}</span>
-        <span data-action="btn-clear-sort" style="color: #888; cursor: pointer; font-size: 10px;">×</span>
+      <span class="gm-filter-tag">
+        <span class="gm-filter-tag__label">${t(sortLabelKey[state.sortMode])}</span>
+        <span data-action="btn-clear-sort" class="gm-filter-tag__clear">×</span>
       </span>
     `;
 
     filterTag = html`
-      <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: 4px;">
+      <span class="gm-filter-tag-wrap">
         ${sortTag}
       </span>
     `;

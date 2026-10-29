@@ -61,11 +61,11 @@ function renderCommitList(
   onCommitClick: (commit: CommitInfo) => void,
 ): HTMLElement {
   const list = document.createElement('div');
-  list.style.cssText = 'flex: 1; overflow-y: auto; min-height: 0;';
+  list.className = 'gm-compare__commits';
 
   if (commits.length === 0) {
     const empty = document.createElement('div');
-    empty.style.cssText = 'padding: 12px 8px; color: #888; font-size: 12px; text-align: center;';
+    empty.className = 'gm-compare__loading';
     empty.textContent = emptyText;
     list.appendChild(empty);
     return list;
@@ -74,36 +74,35 @@ function renderCommitList(
   for (const commit of commits) {
     const row = document.createElement('div');
     row.dataset.hash = commit.hash;
-    row.style.cssText = 'display: flex; align-items: center; padding: 2px 8px; cursor: pointer; border-bottom: 1px solid #2a2a2a; font-size: 12px; height: 28px; box-sizing: border-box;';
+    row.className = 'gm-commit-row';
+    row.setAttribute('aria-selected', 'false');
 
     const dot = document.createElement('span');
-    dot.style.cssText = 'width: 16px; text-align: center; flex-shrink: 0;';
-    dot.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#e8a838"/></svg>';
+    dot.className = 'gm-commit-row__dot';
+    dot.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>';
     row.appendChild(dot);
 
     const hashEl = document.createElement('span');
-    hashEl.style.cssText = 'font-family: monospace; color: #888; font-size: 11px; flex-shrink: 0; margin-right: 6px; white-space: nowrap;';
+    hashEl.className = 'gm-commit-row__hash';
     hashEl.textContent = commit.shortHash;
     row.appendChild(hashEl);
 
     const msgEl = document.createElement('span');
-    msgEl.style.cssText = 'flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 4px;';
+    msgEl.className = 'gm-commit-row__message';
     msgEl.textContent = commit.message;
     msgEl.title = commit.message;
     row.appendChild(msgEl);
 
     const dateEl = document.createElement('span');
-    dateEl.style.cssText = 'margin-left: auto; color: #888; font-size: 11px; flex-shrink: 0; white-space: nowrap;';
+    dateEl.className = 'gm-commit-row__date';
     dateEl.textContent = formatDate(commit.date);
     row.appendChild(dateEl);
 
     const authorEl = document.createElement('span');
-    authorEl.style.cssText = 'margin-left: 12px; color: #888; font-size: 11px; flex-shrink: 0; white-space: nowrap;';
+    authorEl.className = 'gm-commit-row__author';
     authorEl.textContent = commit.authorName;
     row.appendChild(authorEl);
 
-    row.addEventListener('mouseenter', () => { row.style.background = '#2a2d2e'; });
-    row.addEventListener('mouseleave', () => { row.style.background = 'transparent'; });
     row.addEventListener('click', () => onCommitClick(commit));
 
     list.appendChild(row);
@@ -140,43 +139,43 @@ export function showCompareBranchesView(
   let selectedHash: string | null = null;
 
   const overlay = html`
-    <div id="${OVERLAY_ID}" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1001;">
-      <div style="background: #2d2d2d; border: 1px solid #444; border-radius: 6px; width: 1080px; max-width: 96vw; height: 640px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
-        <!-- 标题栏 + 分支选择 -->
-        <div style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #444; flex-shrink: 0;">
-          <span style="display: flex; align-items: center;">${getIcon('compareBranch')}</span>
-          <button id="compare-left-btn" style="padding: 2px 8px; background: #1e1e1e; border: 1px solid #444; border-radius: 3px; color: #ccc; font-size: 12px; cursor: pointer; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></button>
-          <span style="color: #888; font-size: 12px;">${t('compare.with')}</span>
-          <button id="compare-right-btn" style="padding: 2px 8px; background: #1e1e1e; border: 1px solid #444; border-radius: 3px; color: #ccc; font-size: 12px; cursor: pointer; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></button>
-          <span id="compare-summary" style="color: #888; font-size: 11px; margin-left: 4px;"></span>
-          <span style="flex: 1;"></span>
-          <span id="compare-close" title="${t('sidebar.close')}" style="cursor: pointer; color: #888; font-size: 14px; padding: 0 4px;">×</span>
+    <div id="${OVERLAY_ID}" class="gm-dialog-backdrop">
+      <div class="gm-compare">
+        <!-- Title row: branch pickers -->
+        <div class="gm-compare__head">
+          <span class="gm-compare__icon">${getIcon('compareBranch')}</span>
+          <button type="button" id="compare-left-btn" class="gm-btn gm-compare__branch"></button>
+          <span class="gm-compare__with">${t('compare.with')}</span>
+          <button type="button" id="compare-right-btn" class="gm-btn gm-compare__branch"></button>
+          <span id="compare-summary" class="gm-compare__summary"></span>
+          <span class="gm-compare__spacer"></span>
+          <span id="compare-close" class="gm-compare__close" title="${t('sidebar.close')}">×</span>
         </div>
 
-        <div style="flex: 1; display: flex; min-height: 0;">
-          <!-- 左：两个提交列表 -->
-          <div style="width: 56%; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #444;">
-            <div style="display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; flex-shrink: 0;">
-              <span id="compare-left-title" style="font-size: 11px; color: #ccc;"></span>
-              <span id="compare-left-count" style="font-size: 11px; color: #888;">…</span>
+        <div class="gm-compare__body">
+          <!-- Left: the two commit lists -->
+          <div class="gm-compare__lists">
+            <div class="gm-compare__section-head">
+              <span id="compare-left-title" class="gm-compare__section-title"></span>
+              <span id="compare-left-count" class="gm-compare__section-count">…</span>
             </div>
-            <div id="compare-left-list" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; border-bottom: 1px solid #444;">
-              <div style="padding: 12px 8px; color: #888; font-size: 12px; text-align: center;">${t('compare.loading')}</div>
+            <div id="compare-left-list" class="gm-compare__list gm-compare__list--divided">
+              <div class="gm-compare__loading">${t('compare.loading')}</div>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; flex-shrink: 0;">
-              <span id="compare-right-title" style="font-size: 11px; color: #ccc;"></span>
-              <span id="compare-right-count" style="font-size: 11px; color: #888;">…</span>
+            <div class="gm-compare__section-head">
+              <span id="compare-right-title" class="gm-compare__section-title"></span>
+              <span id="compare-right-count" class="gm-compare__section-count">…</span>
             </div>
-            <div id="compare-right-list" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
-              <div style="padding: 12px 8px; color: #888; font-size: 12px; text-align: center;">${t('compare.loading')}</div>
+            <div id="compare-right-list" class="gm-compare__list">
+              <div class="gm-compare__loading">${t('compare.loading')}</div>
             </div>
           </div>
 
-          <!-- 右：选中提交的详情 + 变更文件 + 具体 diff -->
-          <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-            <div id="compare-detail" style="flex: 1; overflow-y: auto; padding: 8px; font-size: 12px;">
-              <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">${t('commit.noSelection')}</div>
+          <!-- Right: selected commit, its files and their diffs -->
+          <div class="gm-compare__detail-wrap">
+            <div id="compare-detail" class="gm-compare__detail">
+              <div class="gm-empty">${t('commit.noSelection')}</div>
             </div>
           </div>
         </div>
@@ -229,9 +228,9 @@ export function showCompareBranchesView(
     let expandedPath: string | null = null;
 
     const head = document.createElement('div');
-    head.style.cssText = 'margin-bottom: 8px;';
+    head.className = 'gm-compare__head-block';
     const msg = document.createElement('div');
-    msg.style.cssText = 'color: #ccc; font-size: 13px; word-break: break-word; margin-bottom: 6px;';
+    msg.className = 'gm-compare__msg';
     msg.textContent = commit.message;
     head.appendChild(msg);
 
@@ -242,12 +241,12 @@ export function showCompareBranchesView(
     ];
     for (const [label, value] of rows) {
       const row = document.createElement('div');
-      row.style.cssText = 'display: flex; gap: 8px; margin-bottom: 2px;';
+      row.className = 'gm-compare__field';
       const labelEl = document.createElement('span');
-      labelEl.style.cssText = 'color: #888; flex-shrink: 0; width: 48px;';
+      labelEl.className = 'gm-compare__field-label';
       labelEl.textContent = label;
       const valueEl = document.createElement('span');
-      valueEl.style.cssText = 'color: #ccc; word-break: break-all;';
+      valueEl.className = 'gm-compare__field-value';
       valueEl.textContent = value;
       row.append(labelEl, valueEl);
       head.appendChild(row);
@@ -256,13 +255,13 @@ export function showCompareBranchesView(
 
     // 变更文件列表
     const fileTitle = document.createElement('div');
-    fileTitle.style.cssText = 'color: #888; font-size: 11px; margin: 8px 0 4px; border-top: 1px solid #3a3a3a; padding-top: 6px;';
+    fileTitle.className = 'gm-compare__file-title';
     fileTitle.textContent = `${t('file.changedFiles')} (${diffs.length})`;
     detailEl.appendChild(fileTitle);
 
     if (diffs.length === 0) {
       const empty = document.createElement('div');
-      empty.style.cssText = 'color: #888; font-size: 11px;';
+      empty.className = 'gm-compare__parents';
       empty.textContent = t('file.noChanges');
       detailEl.appendChild(empty);
       return;
@@ -271,54 +270,54 @@ export function showCompareBranchesView(
     for (const diff of diffs) {
       const row = document.createElement('div');
       row.dataset.comparePath = diff.path;
-      row.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 2px 4px; font-size: 11px; cursor: pointer; border-radius: 2px;';
+      row.className = 'gm-compare__file';
+      row.setAttribute('aria-expanded', 'false');
 
       const caret = document.createElement('span');
-      caret.style.cssText = 'color: #888; width: 10px; flex-shrink: 0;';
+      caret.className = 'gm-compare__file-caret';
       caret.textContent = expandedPath === diff.path ? '▾' : '▸';
       row.appendChild(caret);
 
       const pathEl = document.createElement('span');
-      pathEl.style.cssText = 'flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+      pathEl.className = 'gm-compare__file-path';
       pathEl.textContent = diff.path;
       pathEl.title = diff.path;
       row.appendChild(pathEl);
 
       const addEl = document.createElement('span');
-      addEl.style.cssText = 'color: #4caf50; flex-shrink: 0;';
+      addEl.className = 'gm-compare__file-add';
       addEl.textContent = `+${diff.additions}`;
       row.appendChild(addEl);
 
       const delEl = document.createElement('span');
-      delEl.style.cssText = 'color: #f44336; flex-shrink: 0;';
+      delEl.className = 'gm-compare__file-del';
       delEl.textContent = `-${diff.deletions}`;
       row.appendChild(delEl);
 
       // 文件展开区：点击文件行切换展开，逐行渲染该文件改动
       const content = document.createElement('div');
       content.dataset.compareDiff = diff.path;
-      content.style.cssText = 'display: none; font-family: monospace; font-size: 11px; background: #1e1e1e; border: 1px solid #333; border-radius: 3px; margin: 2px 0 6px 14px; overflow-x: auto;';
+      content.className = 'gm-compare__file-diff';
+      content.hidden = true;
 
       row.addEventListener('click', () => {
         const willExpand = expandedPath !== diff.path;
         expandedPath = willExpand ? diff.path : null;
         caret.textContent = willExpand ? '▾' : '▸';
-        row.style.background = willExpand ? '#2a3a4a' : 'transparent';
+        row.setAttribute('aria-expanded', String(willExpand));
 
         if (willExpand) {
           content.innerHTML = '';
           if (!diff.lines || diff.lines.length === 0) {
             const noDiff = document.createElement('div');
-            noDiff.style.cssText = 'padding: 6px; color: #888;';
+            noDiff.className = 'gm-compare__loading';
             noDiff.textContent = t('file.noDiff');
             content.appendChild(noDiff);
           } else {
             for (const line of diff.lines) content.appendChild(createDiffLine(line));
           }
-          content.style.display = 'block';
-        } else {
-          content.style.display = 'none';
         }
+        content.hidden = !willExpand;
       });
 
       const wrapper = document.createElement('div');
@@ -331,11 +330,11 @@ export function showCompareBranchesView(
       const parents = (detail as unknown as { parents?: string[] }).parents ?? [];
       if (parents.length > 0) {
         const parentsTitle = document.createElement('div');
-        parentsTitle.style.cssText = 'color: #888; font-size: 11px; margin: 8px 0 2px;';
+        parentsTitle.className = 'gm-compare__parents-title';
         parentsTitle.textContent = 'parents';
         detailEl.appendChild(parentsTitle);
         const parentsEl = document.createElement('div');
-        parentsEl.style.cssText = 'color: #888; font-size: 11px; word-break: break-all; font-family: monospace;';
+        parentsEl.className = 'gm-compare__parents';
         parentsEl.textContent = parents.join(', ');
         detailEl.appendChild(parentsEl);
       }
@@ -349,7 +348,7 @@ export function showCompareBranchesView(
    */
   const loadCommitInto = async (commit: CommitInfo): Promise<void> => {
     selectedHash = commit.hash;
-    detailEl.innerHTML = `<div style="color: #888; padding: 8px;">${t('compare.loading')}</div>`;
+    detailEl.innerHTML = `<div class="gm-compare__loading">${t('compare.loading')}</div>`;
     try {
       const [detail, diffs] = await Promise.all([
         service.getCommitDetail(directory, commit.hash),
@@ -367,7 +366,7 @@ export function showCompareBranchesView(
       }));
       detailEl.innerHTML = '';
       const error = document.createElement('div');
-      error.style.cssText = 'color: #f44336; padding: 8px; font-size: 12px;';
+      error.className = 'gm-compare__error';
       error.textContent = `${t('compare.loadFailed')}: ${e instanceof Error ? e.message : String(e)}`;
       detailEl.appendChild(error);
     }
@@ -401,8 +400,8 @@ export function showCompareBranchesView(
       right: rightBranch,
     }));
 
-    leftListEl.innerHTML = `<div style="padding: 12px 8px; color: #888; font-size: 12px; text-align: center;">${t('compare.loading')}</div>`;
-    rightListEl.innerHTML = `<div style="padding: 12px 8px; color: #888; font-size: 12px; text-align: center;">${t('compare.loading')}</div>`;
+    leftListEl.innerHTML = `<div class="gm-compare__loading">${t('compare.loading')}</div>`;
+    rightListEl.innerHTML = `<div class="gm-compare__loading">${t('compare.loading')}</div>`;
     leftCountEl.textContent = '…';
     rightCountEl.textContent = '…';
     summaryEl.textContent = '';
@@ -441,7 +440,7 @@ export function showCompareBranchesView(
         target.innerHTML = '';
         countEl.textContent = '';
         const error = document.createElement('div');
-        error.style.cssText = 'padding: 12px 8px; color: #f44336; font-size: 12px; text-align: center;';
+        error.className = 'gm-compare__error';
         error.textContent = errorText;
         target.appendChild(error);
       }

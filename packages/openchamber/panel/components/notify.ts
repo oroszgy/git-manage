@@ -34,21 +34,7 @@ export function showBranchDeletedNotify(options: BranchDeletedNotifyOptions): vo
 
   const card = document.createElement('div');
   card.id = 'git-branch-deleted-notify';
-  // 贴面板风格：深色底 + 描边 + 圆角 + 阴影，固定右下角高层级
-  card.style.cssText = [
-    'position: fixed',
-    'right: 12px',
-    'bottom: 12px',
-    'z-index: 1100',
-    'background: #2a2a2a',
-    'border: 1px solid #444',
-    'border-radius: 6px',
-    'padding: 10px 12px',
-    'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5)',
-    'font-size: 12px',
-    'color: #ccc',
-    'max-width: 320px',
-  ].join('; ');
+  card.className = 'gm-notify';
 
   const message = document.createElement('div');
   message.textContent = t('branch.notifyDeleted', { name: options.branchName });
@@ -106,26 +92,18 @@ export function showBranchDeletedNotify(options: BranchDeletedNotifyOptions): vo
 
   if (actions.length > 0) {
     const row = document.createElement('div');
-    row.style.cssText = 'display: flex; gap: 12px; margin-top: 6px;';
+    row.className = 'gm-notify__actions';
     for (const action of actions) {
       const link = document.createElement('a');
       link.textContent = action.label;
-      link.style.cssText = 'color: #4a9eff; cursor: pointer; text-decoration: none; font-size: 12px;';
+      link.className = 'gm-notify__action';
       /** 动作执行中（防重复点击哨兵） */
       let busy = false;
-
-      link.addEventListener('mouseenter', () => {
-        link.style.textDecoration = 'underline';
-      });
-      link.addEventListener('mouseleave', () => {
-        link.style.textDecoration = 'none';
-      });
 
       link.addEventListener('click', () => {
         if (busy || closed) return;
         busy = true;
-        link.style.opacity = '0.6';
-        link.style.pointerEvents = 'none';
+        link.dataset.busy = 'true';
         void (async () => {
           try {
             await action.run();
@@ -139,8 +117,7 @@ export function showBranchDeletedNotify(options: BranchDeletedNotifyOptions): vo
           } catch (err) {
             // 失败不 expire（对齐 IDEA）：toast 提示 + 卡片保留 + 链接恢复可点
             busy = false;
-            link.style.opacity = '';
-            link.style.pointerEvents = '';
+            link.dataset.busy = 'false';
             const raw = err instanceof Error ? err.message : String(err);
             const prefixText = action.kind === 'restore'
               ? t('branch.restoreFailed')

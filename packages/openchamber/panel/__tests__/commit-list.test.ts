@@ -2574,11 +2574,11 @@ describe('commit-list', () => {
     const findItem = (label: string) =>
       [...menu.querySelectorAll<HTMLElement>('div')].find(el => el.textContent === label);
 
-    // 改写历史的项置灰（对齐 IDEA：不可用时菜单项直接禁用，而非点击后报错）
-    expect(findItem('编辑提交信息')?.style.color).toBe('rgb(102, 102, 102)');
-    expect(findItem('删除提交')?.style.color).toBe('rgb(102, 102, 102)');
-    // 不影响历史的项仍可用
-    expect(findItem('复制提交哈希')?.style.color).not.toBe('rgb(102, 102, 102)');
+    // History-rewriting items are disabled (data-disabled), not merely unclickable.
+    expect(findItem('编辑提交信息')?.dataset.disabled).toBe('true');
+    expect(findItem('删除提交')?.dataset.disabled).toBe('true');
+    // Items that do not rewrite history stay enabled.
+    expect(findItem('复制提交哈希')?.dataset.disabled).not.toBe('true');
   });
 
   it('工作区干净时，编辑提交信息与删除提交应可用', async () => {
@@ -2591,7 +2591,7 @@ describe('commit-list', () => {
     const findItem = (label: string) =>
       [...menu.querySelectorAll<HTMLElement>('div')].find(el => el.textContent === label);
 
-    expect(findItem('编辑提交信息')?.style.color).not.toBe('rgb(102, 102, 102)');
-    expect(findItem('删除提交')?.style.color).not.toBe('rgb(102, 102, 102)');
+    expect(findItem('编辑提交信息')?.dataset.disabled).not.toBe('true');
+    expect(findItem('删除提交')?.dataset.disabled).not.toBe('true');
   });
 });

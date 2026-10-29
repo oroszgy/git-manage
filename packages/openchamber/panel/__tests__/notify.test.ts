@@ -74,11 +74,9 @@ describe('notify', () => {
       expect(card.textContent).toContain('已删除的分支: dev');
       expect(findLink('还原')).toBeTruthy();
       expect(findLink('删除跟踪的分支')).toBeTruthy();
-      // 卡片为固定右下角的深色面板风格
-      expect(card.style.position).toBe('fixed');
-      expect(card.style.right).toBe('12px');
-      expect(card.style.bottom).toBe('12px');
-      expect(card.style.background).toBeTruthy();
+      // Positioning and colours come from .gm-notify in styles.css.
+      expect(card.classList.contains('gm-notify')).toBe(true);
+      expect(card.getAttribute('style')).toBeNull();
     });
 
     it('仅提供 onRestore 时只显示还原链接，不显示删除跟踪链接', () => {
