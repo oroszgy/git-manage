@@ -2,6 +2,12 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式约定，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。本文件基于本仓库提交历史整理。
 
+## [0.0.9] - 2026-10-29
+
+### Changed
+
+- The branch sidebar can now shrink to 160px, giving more room to the commit list; its header actions wrap when the column is too narrow for one row
+
 ## [0.0.8] - 2026-10-29
 
 ### Fixed
