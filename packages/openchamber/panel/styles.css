@@ -619,3 +619,341 @@ textarea {
   outline: none;
   border-color: var(--oc-focus);
 }
+
+/* ---------------------------------------------------------------------------
+ * Commit list
+ * ------------------------------------------------------------------------- */
+.gm-commit-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  user-select: none;
+  outline: none;
+}
+
+.gm-commit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gm-commit-row:hover {
+  background: var(--oc-hover);
+}
+
+.gm-commit-row[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+.gm-commit-row__dot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  width: 12px;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row[aria-selected="true"] .gm-commit-row__dot {
+  color: var(--oc-primary);
+}
+
+.gm-commit-row__hash {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  font-family: var(--oc-mono);
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row__message {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-commit-row__date {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row__author {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-commit-row--no-date .gm-commit-row__author {
+  margin-left: auto;
+}
+
+/* Branch / tag reference chip. */
+.gm-ref {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.gm-ref--local {
+  background: color-mix(in srgb, var(--oc-warning) 18%, transparent);
+  color: var(--oc-warning);
+}
+
+.gm-ref--remote {
+  background: color-mix(in srgb, var(--oc-primary) 18%, transparent);
+  color: var(--oc-primary);
+}
+
+.gm-ref--tag {
+  background: color-mix(in srgb, var(--oc-success) 18%, transparent);
+  color: var(--oc-success);
+}
+
+/* ---------------------------------------------------------------------------
+ * Pane headers and commit detail
+ * ------------------------------------------------------------------------- */
+.gm-pane-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  font-size: 11px;
+  color: var(--oc-muted);
+  flex-shrink: 0;
+}
+
+.gm-pane-header__count {
+  color: var(--oc-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.gm-detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.gm-detail__field {
+  margin-bottom: 8px;
+}
+
+.gm-detail__label {
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-detail__value {
+  color: var(--oc-fg);
+  word-break: break-all;
+}
+
+.gm-detail__message {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--oc-border);
+  color: var(--oc-fg);
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Changed files and diff
+ * ------------------------------------------------------------------------- */
+.gm-diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gm-file-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-bottom: 1px solid var(--oc-border);
+}
+
+.gm-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gm-file-item:hover {
+  background: var(--oc-hover);
+}
+
+.gm-file-item[aria-selected="true"] {
+  background: var(--oc-selection);
+  color: var(--oc-selection-fg);
+}
+
+/* Status letter (A/M/D/R) doubles as the file's change kind. */
+.gm-file-item__status {
+  flex: 0 0 auto;
+  width: 12px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.gm-file-item__status[data-kind="A"] {
+  color: var(--oc-success);
+}
+
+.gm-file-item__status[data-kind="M"] {
+  color: var(--oc-warning);
+}
+
+.gm-file-item__status[data-kind="D"] {
+  color: var(--oc-error);
+}
+
+.gm-file-item__status[data-kind="R"] {
+  color: var(--oc-primary);
+}
+
+.gm-file-item__path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-file-item__add {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--oc-success);
+}
+
+.gm-file-item__del {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--oc-error);
+}
+
+.gm-diff__preview {
+  height: 120px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gm-diff__file {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--oc-border);
+  font-size: 11px;
+  color: var(--oc-muted);
+}
+
+.gm-diff__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--oc-mono);
+  font-size: 12px;
+}
+
+.gm-diff__line {
+  display: flex;
+  line-height: 1.45;
+}
+
+.gm-diff__line[data-type="add"] {
+  background: color-mix(in srgb, var(--oc-success) 16%, transparent);
+}
+
+.gm-diff__line[data-type="delete"] {
+  background: color-mix(in srgb, var(--oc-error) 16%, transparent);
+}
+
+.gm-diff__num {
+  flex: 0 0 auto;
+  width: 34px;
+  padding: 0 4px;
+  text-align: right;
+  color: var(--oc-muted);
+  user-select: none;
+}
+
+.gm-diff__sign {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+  user-select: none;
+}
+
+.gm-diff__line[data-type="add"] .gm-diff__sign {
+  color: var(--oc-success);
+}
+
+.gm-diff__line[data-type="delete"] .gm-diff__sign {
+  color: var(--oc-error);
+}
+
+.gm-diff__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 4px;
+  white-space: pre;
+}
+
+/* Syntax tokens: colours come from the host's ready.theme.tokens. */
+.gm-tok--kw {
+  color: var(--oc-syntax-keyword, var(--oc-fg));
+}
+
+.gm-tok--str {
+  color: var(--oc-syntax-string, var(--oc-success));
+}
+
+.gm-tok--num {
+  color: var(--oc-syntax-number, var(--oc-warning));
+}
+
+.gm-tok--fn {
+  color: var(--oc-syntax-function, var(--oc-primary));
+}
+
+.gm-tok--type {
+  color: var(--oc-syntax-type, var(--oc-info));
+}
+
+.gm-tok--com {
+  color: var(--oc-syntax-comment, var(--oc-muted));
+  font-style: italic;
+}
+
+.gm-tok--op {
+  color: var(--oc-syntax-operator, var(--oc-muted));
+}

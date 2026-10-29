@@ -324,8 +324,9 @@ describe('commit-list', () => {
     expect(rows.length).toBe(4);
     expect(row('h1').textContent).toContain(commits[0].message);
     expect(row('h1').textContent).toContain('张三');
-    // 未选中行的初始背景由模板写入 transparent（jsdom 不解析 background 简写，断言原始样式串）
-    expect(row('h1').getAttribute('style')).toContain('background: transparent');
+    // Appearance lives in styles.css: rows carry state, not styles.
+    expect(row('h1').getAttribute('style')).toBeNull();
+    expect(row('h1').getAttribute('aria-selected')).toBe('false');
 
     // 左侧过滤控件 + 右侧角三项（刷新 / 设置 / 跳转）
     for (const action of ['btn-regex', 'btn-case', 'btn-filter-branch', 'btn-filter-user', 'btn-filter-date', 'btn-filter-path', 'btn-refresh', 'btn-settings', 'btn-goto']) {
@@ -355,9 +356,9 @@ describe('commit-list', () => {
     expect(onCommitSelect).toHaveBeenCalledWith(commits[1]);
     expect(getState().selectedCommit).toBe(commits[1]);
     expect(selectedHashes()).toEqual(['h2']);
-    // 选中行高亮 #2a3a4a
-    expect(row('h2').style.backgroundColor).toBe('rgb(42, 58, 74)');
-    expect(row('h1').style.backgroundColor).not.toBe('rgb(42, 58, 74)');
+    // Selection is a state attribute; styles.css paints it.
+    expect(row('h2').getAttribute('aria-selected')).toBe('true');
+    expect(row('h1').getAttribute('aria-selected')).toBe('false');
   });
 
   it('Ctrl/Cmd 点击应该切换多选集合', () => {
@@ -551,51 +552,35 @@ describe('commit-list', () => {
     expect(list.querySelectorAll('[data-hash]').length).toBe(4);
   });
 
-  it('悬停与移出提交行应该切换背景高亮（含捕获阶段与未命中场景）', () => {
+  it('悬停不再由脚本改写内联背景（外观交给样式表）', () => {
     setupCommits();
     createPanel();
     const list = row('h1').parentElement as HTMLElement;
 
-    // 未选中：悬停行内子元素（非冒泡事件在捕获阶段命中）→ 悬停色
-    const inner1 = row('h1').querySelector('span') as HTMLElement;
-    inner1.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-    expect(row('h1').style.backgroundColor).toBe('rgb(42, 45, 46)');
-
-    // 目标没有 data-hash 祖先：不应改写列表容器背景
+    const inner = row('h1').querySelector('span') as HTMLElement;
+    inner.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+    inner.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
     list.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-    expect(list.style.backgroundColor).toBe('');
-
-    // 移出未选中行 → 恢复透明
-    inner1.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-    expect(row('h1').style.backgroundColor).toBe('transparent');
-
     list.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-    expect(list.style.backgroundColor).toBe('');
 
-    // 选中后：移出应回到选中高亮色
-    clickRow('h1');
-    const inner2 = row('h1').querySelector('span') as HTMLElement;
-    inner2.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-    expect(row('h1').style.backgroundColor).toBe('rgb(42, 45, 46)');
-    inner2.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-    expect(row('h1').style.backgroundColor).toBe('rgb(42, 58, 74)');
-
-    // 直接派发到列表容器（closest 未命中）的悬停/移出不应抛出异常
+    // No script-side repaint: rows and the list keep stylesheet-driven colours.
+    expect(row('h1').getAttribute('style')).toBeNull();
+    expect(list.getAttribute('style')).toBeNull();
     expect(windowErrors).toEqual([]);
   });
 
   it('仅主提交选中（不在多选集合）时行仍应高亮且移出保持', () => {
     const commits = setupCommits();
     createPanel();
-    // 只改 selectedCommit，保证订阅回调的 changed 仅含该字段
+    // Only selectedCommit changes, so the subscription sees just that field.
     setState(s => { s.selectedCommit = commits[0]; });
-    expect(row('h1').style.backgroundColor).toBe('rgb(42, 58, 74)');
+    expect(row('h1').getAttribute('aria-selected')).toBe('true');
 
     const target = row('h1');
     target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-    expect(target.style.backgroundColor).toBe('rgb(42, 45, 46)');
     target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
-    expect(target.style.backgroundColor).toBe('rgb(42, 58, 74)');
+    expect(target.getAttribute('aria-selected')).toBe('true');
+    expect(target.getAttribute('style')).toBeNull();
   });
 
   it('分支标签应该按提交映射渲染本地/远程配色并在分支变化时刷新', () => {
@@ -615,7 +600,7 @@ describe('commit-list', () => {
 
     /** 取某提交行上的分支标签元素 */
     const tagOf = (hash: string, name: string) =>
-      [...row(hash).querySelectorAll<HTMLElement>('span[style*="border-radius: 2px"]')]
+      [...row(hash).querySelectorAll<HTMLElement>('.gm-ref')]
         .find(el => el.textContent === name);
 
     // 同一提交上的多个分支标签都要保留
@@ -623,28 +608,25 @@ describe('commit-list', () => {
     expect(row('h1').textContent).toContain('feature/x');
     expect(row('h1').textContent).not.toContain('Stryker was here');
 
-    // 本地分支配色
+    // Local branches get the local variant, remote ones (containing '/') the remote variant.
     const devTag = tagOf('h1', 'dev');
     expect(devTag).toBeTruthy();
-    expect(devTag!.style.backgroundColor).toBe('rgb(74, 58, 26)');  // #4a3a1a
-    expect(devTag!.style.color).toBe('rgb(232, 168, 56)');         // #e8a838
+    expect(devTag!.classList.contains('gm-ref--local')).toBe(true);
 
-    // 远程分支（含 '/'）配色
     const featureTag = tagOf('h1', 'feature/x');
     expect(featureTag).toBeTruthy();
-    expect(featureTag!.style.backgroundColor).toBe('rgb(26, 58, 74)'); // #1a3a4a
-    expect(featureTag!.style.color).toBe('rgb(88, 157, 246)');         // #589df6
+    expect(featureTag!.classList.contains('gm-ref--remote')).toBe(true);
     const originTag = tagOf('h2', 'origin/main');
     expect(originTag).toBeTruthy();
-    expect(originTag!.style.backgroundColor).toBe('rgb(26, 58, 74)');
+    expect(originTag!.classList.contains('gm-ref--remote')).toBe(true);
 
-    // HEAD 不算本地分支
+    // HEAD is not a local branch.
     const headTag = tagOf('h3', 'HEAD');
     expect(headTag).toBeTruthy();
-    expect(headTag!.style.backgroundColor).toBe('rgb(26, 58, 74)');
+    expect(headTag!.classList.contains('gm-ref--remote')).toBe(true);
 
-    // 无分支的提交：没有标签、没有残留占位文本
-    expect(row('h4').querySelectorAll('span[style*="border-radius: 2px"]').length).toBe(0);
+    // A commit without references renders no chip and leaves no placeholder text.
+    expect(row('h4').querySelectorAll('.gm-ref').length).toBe(0);
     expect(row('h4').textContent).not.toContain('Stryker was here');
 
     // 分支字段变化通过订阅局部刷新出新标签
@@ -1450,16 +1432,18 @@ describe('commit-list', () => {
     expect(spanCount()).toBe(1);
   });
 
-  it('作者列左边距应随日期列显隐在 12px 与 auto 间切换', () => {
+  it('日期列隐藏时作者列接替右对齐（行上带 no-date 修饰类）', () => {
     setupCommits();
     createPanel();
 
-    const authorCol = row('h1').querySelector('[data-col="author"]') as HTMLElement;
-    expect(authorCol.style.marginLeft).toBe('12px'); // 日期列显示 → 12px
+    expect(row('h1').classList.contains('gm-commit-row--no-date')).toBe(false);
+    expect(row('h1').querySelector('[data-col="date"]')).toBeTruthy();
 
     setState(s => { s.displaySettings.showDate = false; });
-    const authorCol2 = row('h1').querySelector('[data-col="author"]') as HTMLElement;
-    expect(authorCol2.style.marginLeft).toBe('auto'); // 日期列隐藏 → 接替右对齐
+    const updated = row('h1');
+    expect(updated.classList.contains('gm-commit-row--no-date')).toBe(true);
+    expect(updated.querySelector('[data-col="date"]')).toBeNull();
+    expect(updated.querySelector('[data-col="author"]')).toBeTruthy();
   });
 
   it('作者名中的特殊字符应经转义后按原文渲染', () => {

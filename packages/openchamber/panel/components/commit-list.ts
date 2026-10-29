@@ -380,21 +380,7 @@ export function createCommitListPanel(
     listContainer.addEventListener('mouseleave', endDrag);
     window.addEventListener('mouseup', endDrag);
 
-    listContainer.addEventListener('mouseenter', (e) => {
-      const target = (e.target as HTMLElement).closest('[data-hash]');
-      if (target) (target as HTMLElement).style.background = '#2a2d2e';
-    }, true);
-
-    listContainer.addEventListener('mouseleave', (e) => {
-      const target = (e.target as HTMLElement).closest('[data-hash]');
-      if (target) {
-        const state = getState();
-        const hash = target.getAttribute('data-hash');
-        const isSelected = hash !== null &&
-          (state.selectedCommits.has(hash) || state.selectedCommit?.hash === hash);
-        (target as HTMLElement).style.background = isSelected ? '#2a3a4a' : 'transparent';
-      }
-    }, true);
+    // Row hover and selection are painted by styles.css (aria-selected + :hover).
 
     listContainer.addEventListener('click', (e) => {
       const commit = findCommitFromEvent(e);
@@ -883,68 +869,59 @@ export function createCommitListPanel(
 function createCommitItem(commit: CommitInfo, branches: string[] = []): HTMLElement {
   const state = getState();
   const settings = state.displaySettings;
-  // 多选集合成员或单选主提交均高亮
+  // Multi-select members and the single primary commit are both selected.
   const isSelected = state.selectedCommits.has(commit.hash) ||
     state.selectedCommit?.hash === commit.hash;
-  const bgColor = isSelected ? '#2a3a4a' : 'transparent';
 
-  // 引用标签（IntelliJ 风格彩色标签）
-  // 语义对齐 IDEA SimpleRefGroup.buildGroups：
-  // - compactReferences：所有引用合并成一组，只渲染该组的首个名字
-  // - showTagNames：控制标签是否显示名字（不影响分支）；两者独立生效，与调整顺序无关
+  // Reference chips follow IDEA's SimpleRefGroup.buildGroups semantics:
+  // - compactReferences: merge every reference into one group, render its first name
+  // - showTagNames: whether tag names are drawn (branches always are)
   const renderRef = (name: string, isTag: boolean): string => {
     const isLocal = !isTag && !name.includes('/') && name !== 'HEAD';
-    const bgColor = isTag ? '#2a3a2a' : (isLocal ? '#4a3a1a' : '#1a3a4a');
-    const fgColor = isTag ? '#6fbf73' : (isLocal ? '#e8a838' : '#589df6');
-    // 标签名被隐藏时仍保留标签色块，只是不显示文字（与 IDEA 传入空名一致）
+    const kind = isTag ? 'tag' : (isLocal ? 'local' : 'remote');
+    // A hidden tag name still keeps its coloured block, matching IDEA's empty name.
     const label = isTag && !settings.showTagNames ? '' : name;
-    return `<span data-ref="${name}" style="margin-left: 6px; padding: 0 5px; background: ${bgColor}; border-radius: 2px; font-size: 10px; color: ${fgColor}; flex-shrink: 0; white-space: nowrap;">${label}</span>`;
+    return `<span data-ref="${name}" class="gm-ref gm-ref--${kind}">${label}</span>`;
   };
 
   const refs = branches.map(b => ({ name: b, isTag: b.startsWith('tag:') }));
   const branchTags = (() => {
     if (refs.length === 0) return '';
     if (settings.compactReferences) {
-      // 紧凑：只显示首个引用（若首个是标签且标签名隐藏，则只留色块）
       const first = refs[0];
       return renderRef(first.name, first.isTag);
     }
     return refs.map(r => renderRef(r.name, r.isTag)).join('');
   })();
 
-  // 哈希列 / 日期列 / 作者列按显示设置开关；日期列隐藏时作者列接替右对齐
+  // Hash / date / author columns follow the display settings; when the date is
+  // hidden the author column takes over the right edge.
   const hashCol = settings.showHash
-    ? `<span data-col="hash" style="font-family: monospace; color: #888; font-size: 11px; flex-shrink: 0; margin-right: 6px; white-space: nowrap;">${escapeText(commit.shortHash)}</span>`
+    ? `<span data-col="hash" class="gm-commit-row__hash">${escapeText(commit.shortHash)}</span>`
     : '';
   const dateCol = settings.showDate
-    ? `<span data-col="date" style="margin-left: auto; color: #888; font-size: 11px; flex-shrink: 0; white-space: nowrap;">${formatDate(
+    ? `<span data-col="date" class="gm-commit-row__date">${formatDate(
         settings.preferCommitDate && commit.commitDate ? commit.commitDate : commit.date,
       )}</span>`
     : '';
   const authorCol = settings.showAuthor
-    ? `<span data-col="author" style="margin-left: ${settings.showDate ? '12px' : 'auto'}; color: #888; font-size: 11px; flex-shrink: 0; white-space: nowrap;">${escapeText(commit.authorName)}</span>`
+    ? `<span data-col="author" class="gm-commit-row__author">${escapeText(commit.authorName)}</span>`
     : '';
 
   const item = html`
-    <div 
-      style="display: flex; align-items: center; padding: 2px 8px; cursor: pointer; border-bottom: 1px solid #2a2a2a; font-size: 12px; background: ${bgColor}; height: 28px;"
+    <div
+      class="gm-commit-row${settings.showDate ? '' : ' gm-commit-row--no-date'}"
       data-hash="${commit.hash}"
+      aria-selected="${isSelected ? 'true' : 'false'}"
     >
-      <!-- 圆点指示器 -->
-      <span style="width: 16px; text-align: center; flex-shrink: 0;">
-        <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#e8a838"/></svg>
+      <span class="gm-commit-row__dot">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>
       </span>
-      <!-- 哈希列 -->
       ${hashCol}
-      <!-- 引用在左：referencesOnLeft 开启时标签置于消息之前 -->
       ${settings.referencesOnLeft ? branchTags : ''}
-      <!-- 提交消息 -->
-      <span style="flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 4px;">${commit.message}</span>
-      <!-- 引用在右（默认） -->
+      <span class="gm-commit-row__message">${commit.message}</span>
       ${settings.referencesOnLeft ? '' : branchTags}
-      <!-- 时间 -->
       ${dateCol}
-      <!-- 作者 -->
       ${authorCol}
     </div>
   `;

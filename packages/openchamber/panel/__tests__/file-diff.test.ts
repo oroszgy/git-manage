@@ -228,21 +228,22 @@ describe('file-diff', () => {
       expect(contextLine.children[3].textContent).toBe('const a = 1;');
       expect(contextLine.children[0].textContent).toBe('1');
       expect(contextLine.children[1].textContent).toBe('1');
-      expect(contextLine.getAttribute('style')).toContain('background: transparent');
+      expect(contextLine.dataset.type).toBe('context');
+      expect(contextLine.getAttribute('style')).toBeNull();
 
       // add 行：前缀 +、绿色背景、只有新侧行号
       expect(addLine.children[2].textContent).toBe('+');
       expect(addLine.children[3].textContent).toBe('const b = 2;');
       expect(addLine.children[0].textContent).toBe(' ');
       expect(addLine.children[1].textContent).toBe('2');
-      expect(addLine.getAttribute('style')).toContain('background: #1a3a1a');
+      expect(addLine.dataset.type).toBe('add');
 
       // delete 行：前缀 -、红色背景、只有旧侧行号
       expect(deleteLine.children[2].textContent).toBe('-');
       expect(deleteLine.children[3].textContent).toBe('const c = 3;');
       expect(deleteLine.children[0].textContent).toBe('2');
       expect(deleteLine.children[1].textContent).toBe(' ');
-      expect(deleteLine.getAttribute('style')).toContain('background: #3a1a1a');
+      expect(deleteLine.dataset.type).toBe('delete');
     });
 
     it('差异文件没有行内容时应该显示无差异内容', () => {
@@ -355,15 +356,17 @@ describe('file-diff', () => {
 
       items.forEach((item, index) => {
         const statusSpan = (item as HTMLElement).children[0] as HTMLElement;
-        const [label, color] = expectedStatus[index];
+        const [label] = expectedStatus[index];
         expect(statusSpan.textContent).toBe(label);
-        expect(statusSpan.getAttribute('style')).toContain(`color: ${color}`);
+        // The letter is also the change kind; styles.css paints per data-kind.
+        expect(statusSpan.dataset.kind).toBe(label);
+        expect(statusSpan.getAttribute('style')).toBeNull();
       });
     });
   });
 
   describe('差异行颜色', () => {
-    it('上下文行、新增行、删除行应分别渲染各自的前景色', () => {
+    it('上下文行、新增行、删除行应带各自的类型标记', () => {
       const { container } = createPanel();
       setState(s => {
         s.diffs = sampleDiffs;
@@ -374,14 +377,15 @@ describe('file-diff', () => {
       const diffContent = (getPreviewContainer(container).children[1] as HTMLElement);
       const [contextLine, addLine, deleteLine] = Array.from(diffContent.children) as HTMLElement[];
 
-      expect(contextLine.getAttribute('style')).toContain('color: #ccc');
-      expect(addLine.getAttribute('style')).toContain('color: #4caf50');
-      expect(deleteLine.getAttribute('style')).toContain('color: #f44336');
+      // Line tints are stylesheet rules keyed on data-type.
+      expect(contextLine.dataset.type).toBe('context');
+      expect(addLine.dataset.type).toBe('add');
+      expect(deleteLine.dataset.type).toBe('delete');
     });
   });
 
-  describe('鼠标悬停交互', () => {
-    it('鼠标移入文件条目应高亮，移入列表空白处不应抛错', () => {
+  describe('鼠标交互', () => {
+    it('悬停不再由脚本改写内联背景，空白处也不抛错', () => {
       const { container } = createPanel();
       setState(s => {
         s.diffs = sampleDiffs;
@@ -393,45 +397,13 @@ describe('file-diff', () => {
 
       try {
         dispatchMouse(item, 'mouseenter');
-        expect(item.style.background).toBe('rgb(42, 42, 42)');
-
-        // 目标没有 data-path：原实现应直接跳过，既不抛错也不改样式
+        dispatchMouse(item, 'mouseleave');
         dispatchMouse(list, 'mouseenter');
-        expect(errors).toHaveLength(0);
-        expect(item.style.background).toBe('rgb(42, 42, 42)');
-      } finally {
-        restore();
-      }
-    });
-
-    it('鼠标移出选中与未选中条目应分别渲染选中色与透明', () => {
-      const { container } = createPanel();
-      setState(s => {
-        s.diffs = sampleDiffs;
-      });
-
-      const list = getListContainer(container);
-      const selected = list.querySelector('[data-path="src/app.ts"]') as HTMLElement;
-      const other = list.querySelector('[data-path="src/util.new.ts"]') as HTMLElement;
-      const { errors, restore } = captureListenerErrors();
-
-      try {
-        // 未选中条目：悬停高亮后移出应恢复透明
-        dispatchMouse(other, 'mouseenter');
-        expect(other.style.background).toBe('rgb(42, 42, 42)');
-        dispatchMouse(other, 'mouseleave');
-        expect(other.style.background).toBe('transparent');
-
-        // 选中条目：移出后保持选中色
-        selected.click();
-        dispatchMouse(selected, 'mouseenter');
-        expect(selected.style.background).toBe('rgb(42, 42, 42)');
-        dispatchMouse(selected, 'mouseleave');
-        expect(selected.style.background).toBe('rgb(42, 58, 74)');
-
-        // 列表空白处：目标没有 data-path，不应抛错
         dispatchMouse(list, 'mouseleave');
+
         expect(errors).toHaveLength(0);
+        expect(item.getAttribute('style')).toBeNull();
+        expect(item.getAttribute('aria-selected')).toBe('false');
       } finally {
         restore();
       }
@@ -454,8 +426,8 @@ describe('file-diff', () => {
         first.click();
 
         expect(errors).toHaveLength(0);
-        expect(first.style.background).toBe('rgb(42, 58, 74)');
-        expect(second.style.background).toBe('transparent');
+        expect(first.getAttribute('aria-selected')).toBe('true');
+        expect(second.getAttribute('aria-selected')).toBe('false');
       } finally {
         restore();
       }
@@ -478,7 +450,7 @@ describe('file-diff', () => {
 
         expect(errors).toHaveLength(0);
         expect(getPreviewContainer(container).textContent).toContain('src/app.ts');
-        expect(first.style.background).toBe('rgb(42, 58, 74)');
+        expect(first.getAttribute('aria-selected')).toBe('true');
       } finally {
         restore();
       }

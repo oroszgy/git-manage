@@ -1,5 +1,6 @@
 /**
- * 文件差异组件 - IntelliJ 风格
+ * Changed-files panel: file list on top, diff preview below.
+ * Split of the IntelliJ "Local Changes" tool window.
  */
 
 import { html } from '../html';
@@ -7,6 +8,7 @@ import { getState, subscribeFields, FileDiff, DiffLine } from '../state';
 import { ServiceClient } from '../service';
 import { showFileContextMenu } from './file-context-menu';
 import { t } from '../i18n';
+import { highlightLine } from '../syntax';
 
 export function createFileDiffPanel(
   container: HTMLElement,
@@ -27,24 +29,29 @@ export function createFileDiffPanel(
     return item.getAttribute('data-path');
   };
 
+  /** Reflect the selected file in the list without touching inline styles. */
+  const paintSelection = (path: string | null): void => {
+    listContainer?.querySelectorAll<HTMLElement>('[data-path]').forEach((el) => {
+      el.setAttribute('aria-selected', String(el.getAttribute('data-path') === path));
+    });
+  };
+
   const renderPreview = (diff: FileDiff | null) => {
     if (!previewContainer) return;
     previewContainer.innerHTML = '';
 
     if (!diff) {
-      previewContainer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:12px;">${t('file.selectDiff')}</div>`;
+      previewContainer.innerHTML = `<div class="gm-empty">${t('file.selectDiff')}</div>`;
       return;
     }
 
     const title = html`
-      <div style="padding: 4px 8px; background: #252526; border-bottom: 1px solid #333; font-size: 11px; color: #ccc;">
-        ${diff.path}
-      </div>
+      <div class="gm-diff__file">${diff.path}</div>
     `;
     previewContainer.appendChild(title);
 
     const diffContent = html`
-      <div style="flex: 1; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+      <div class="gm-diff__body"></div>
     `;
 
     if (diff.lines && diff.lines.length > 0) {
@@ -52,7 +59,7 @@ export function createFileDiffPanel(
         diffContent.appendChild(createDiffLine(line));
       }
     } else {
-      diffContent.innerHTML = `<div style="padding: 8px; color: #888;">${t('file.noDiff')}</div>`;
+      diffContent.innerHTML = `<div class="gm-empty">${t('file.noDiff')}</div>`;
     }
 
     previewContainer.appendChild(diffContent);
@@ -62,47 +69,31 @@ export function createFileDiffPanel(
     if (disposed) return;
     container.innerHTML = '';
 
-    // 标题
     const state = getState();
     titleEl = html`
-      <div style="padding: 4px 8px; background: #252526; border-bottom: 1px solid #333; font-size: 12px; color: #ccc; flex-shrink: 0;">
-        ${t('file.changedFiles')} <span style="color: #888;">${state.diffs.length}</span>
+      <div class="gm-pane-header">
+        ${t('file.changedFiles')}
+        <span class="gm-pane-header__count" data-file-count>${state.diffs.length}</span>
       </div>
     `;
     container.appendChild(titleEl);
 
-    // 文件列表 + 预览 (上下分割)
+    // File list and preview share the column.
     const splitArea = html`
-      <div style="display: flex; flex-direction: column; flex: 1; overflow: hidden;"></div>
+      <div class="gm-diff"></div>
     `;
 
-    // 文件列表
     listContainer = html`
-      <div style="flex: 1; overflow-y: auto; overflow-x: hidden; border-bottom: 1px solid #333;"></div>
+      <div class="gm-file-list"></div>
     `;
-
-    listContainer.addEventListener('mouseenter', (e) => {
-      const target = (e.target as HTMLElement).closest('[data-path]');
-      if (target) (target as HTMLElement).style.background = '#2a2a2a';
-    }, true);
-
-    listContainer.addEventListener('mouseleave', (e) => {
-      const target = (e.target as HTMLElement).closest('[data-path]');
-      if (target) {
-        (target as HTMLElement).style.background = target.getAttribute('data-path') === selectedPath ? '#2a3a4a' : 'transparent';
-      }
-    }, true);
 
     listContainer.addEventListener('click', (e) => {
       const path = findPathFromEvent(e);
-      if (path) {
-        selectedPath = path;
-        const diff = getState().diffs.find(d => d.path === path) || null;
-        renderPreview(diff);
-        listContainer?.querySelectorAll('[data-path]').forEach(el => {
-          (el as HTMLElement).style.background = el.getAttribute('data-path') === path ? '#2a3a4a' : 'transparent';
-        });
-      }
+      if (!path) return;
+      selectedPath = path;
+      const diff = getState().diffs.find(d => d.path === path) || null;
+      renderPreview(diff);
+      paintSelection(path);
     });
 
     listContainer.addEventListener('contextmenu', (e) => {
@@ -116,20 +107,17 @@ export function createFileDiffPanel(
 
     splitArea.appendChild(listContainer);
 
-    // 差异预览
     previewContainer = html`
-      <div style="height: 120px; min-height: 60px; display: flex; flex-direction: column; overflow: hidden; background: #1e1e1e;"></div>
+      <div class="gm-diff__preview"></div>
     `;
     splitArea.appendChild(previewContainer);
 
     container.appendChild(splitArea);
 
-    // 渲染文件列表
     renderFileList();
-
     renderPreview(null);
 
-    // 订阅 diffs，变化时局部更新标题计数 + 文件列表
+    // Keep the header count and the list in step when the commit changes.
     if (unsubscribe) unsubscribe();
     unsubscribe = subscribeFields(['diffs'], () => {
       if (disposed) return;
@@ -143,7 +131,7 @@ export function createFileDiffPanel(
   const updateTitleCount = () => {
     if (!titleEl) return;
     const count = getState().diffs.length;
-    const span = titleEl.querySelector('span');
+    const span = titleEl.querySelector('[data-file-count]');
     if (span) span.textContent = String(count);
   };
 
@@ -152,12 +140,13 @@ export function createFileDiffPanel(
     const state = getState();
     listContainer.innerHTML = '';
     if (state.diffs.length === 0) {
-      listContainer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:12px;">${t('file.noChanges')}</div>`;
+      listContainer.innerHTML = `<div class="gm-empty">${t('file.noChanges')}</div>`;
       return;
     }
     for (const diff of state.diffs) {
       listContainer.appendChild(createFileDiffItem(diff));
     }
+    paintSelection(selectedPath);
   };
 
   const dispose = () => {
@@ -172,44 +161,42 @@ export function createFileDiffPanel(
 }
 
 /**
- * 渲染单行差异（比较视图等处复用）
- * @param line 差异行
- * @returns 差异行元素
+ * Render one diff line (also reused by the compare view).
+ * @param line Diff line
+ * @returns Diff line element
  */
 export function createDiffLine(line: DiffLine): HTMLElement {
-  let bgColor = 'transparent';
-  let color = '#ccc';
-  let prefix = ' ';
-
-  if (line.type === 'add') { bgColor = '#1a3a1a'; color = '#4caf50'; prefix = '+'; }
-  else if (line.type === 'delete') { bgColor = '#3a1a1a'; color = '#f44336'; prefix = '-'; }
+  const isAdd = line.type === 'add';
+  const isDelete = line.type === 'delete';
+  const type = isAdd ? 'add' : isDelete ? 'delete' : 'context';
+  const prefix = isAdd ? '+' : isDelete ? '-' : ' ';
 
   const lineNum = line.newLine !== undefined ? String(line.newLine) : ' ';
   const oldNum = line.oldLine !== undefined ? String(line.oldLine) : ' ';
 
   return html`
-    <div style="display: flex; background: ${bgColor}; color: ${color}; font-size: 12px; line-height: 1.4;">
-      <span style="width: 36px; text-align: right; padding: 0 4px; color: #666; user-select: none; flex-shrink: 0;">${oldNum}</span>
-      <span style="width: 36px; text-align: right; padding: 0 4px; color: #666; user-select: none; flex-shrink: 0;">${lineNum}</span>
-      <span style="width: 14px; text-align: center; user-select: none; flex-shrink: 0;">${prefix}</span>
-      <span style="flex: 1; padding: 0 4px; white-space: pre; overflow-x: auto;">${line.content}</span>
+    <div class="gm-diff__line" data-type="${type}">
+      <span class="gm-diff__num">${oldNum}</span>
+      <span class="gm-diff__num">${lineNum}</span>
+      <span class="gm-diff__sign">${prefix}</span>
+      <span class="gm-diff__text">${highlightLine(line.content)}</span>
     </div>
   `;
 }
 
 function createFileDiffItem(diff: FileDiff): HTMLElement {
   const statusLabel = getStatusLabel(diff.path);
-  const statusColor = getStatusColor(statusLabel);
 
   return html`
-    <div 
-      style="display: flex; align-items: center; padding: 3px 8px; cursor: pointer; border-bottom: 1px solid #2a2a2a; font-size: 12px;"
+    <div
+      class="gm-file-item"
       data-path="${diff.path}"
+      aria-selected="false"
     >
-      <span style="width: 14px; text-align: center; color: ${statusColor}; margin-right: 6px; font-size: 10px; font-weight: bold;">${statusLabel}</span>
-      <span style="flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${diff.path}</span>
-      <span style="margin-left: 8px; font-size: 10px; color: #4caf50;">+${diff.additions}</span>
-      <span style="margin-left: 4px; font-size: 10px; color: #f44336;">-${diff.deletions}</span>
+      <span class="gm-file-item__status" data-kind="${statusLabel}">${statusLabel}</span>
+      <span class="gm-file-item__path">${diff.path}</span>
+      <span class="gm-file-item__add">+${diff.additions}</span>
+      <span class="gm-file-item__del">-${diff.deletions}</span>
     </div>
   `;
 }
@@ -220,14 +207,4 @@ function getStatusLabel(path: string): string {
   if (path.includes('.modified.') || path.includes('.changed.')) return 'M';
   if (path.includes('.renamed.')) return 'R';
   return 'M';
-}
-
-function getStatusColor(label: string): string {
-  switch (label) {
-    case 'A': return '#4caf50';
-    case 'D': return '#f44336';
-    case 'M': return '#ff9800';
-    case 'R': return '#589df6';
-    default: return '#ccc';
-  }
 }
