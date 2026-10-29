@@ -133,18 +133,18 @@ async function render(): Promise<void> {
     branchPanel.hidden = getState().branchPanelHidden;
     contentArea.appendChild(branchPanel);
 
+    /** Painted width of the details column, or the stored size before it mounts. */
+    const sidePanelWidth = (): number => Math.round(
+      contentArea.querySelector<HTMLElement>('.gm-side')?.getBoundingClientRect().width ?? 0,
+    ) || getLayout().side;
+
     // Drag the branch column wider or narrower; the commit list takes the rest.
     const branchesSplitter = createSplitter({
       axis: 'x',
       sign: 1,
       value: () => Math.round(branchPanel.getBoundingClientRect().width) || getLayout().branches,
       min: () => 220,
-      max: () => Math.max(
-        220,
-        contentArea.clientWidth
-          - (Math.round(detailPanel.getBoundingClientRect().width) || getLayout().side)
-          - 210,
-      ),
+      max: () => Math.max(220, contentArea.clientWidth - sidePanelWidth() - 210),
       onResize: (px) => { setLayoutSize('branches', px); },
       onCommit: () => { commitLayout(); },
     });
