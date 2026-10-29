@@ -120,8 +120,9 @@ textarea {
 }
 
 .gm-branches {
-  width: 260px;
-  min-width: 260px;
+  /* Fits the title plus eight 24px header actions without truncating either. */
+  width: 280px;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -417,8 +418,8 @@ textarea {
 }
 
 .gm-branches__title {
+  flex: 0 0 auto;
   margin-right: auto;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

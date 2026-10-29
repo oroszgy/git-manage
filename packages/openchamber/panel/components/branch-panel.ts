@@ -185,7 +185,7 @@ export function createBranchPanel(
     const title = t('sidebar.showMyBranches');
     myBranchesBtn = html`
       <button type="button" class="gm-icon-btn" data-branch-action="myBranches" title="${title}" aria-label="${title}" aria-pressed="false">
-        ${getIcon('search')}
+        ${getIcon('myBranches')}
       </button>
     `;
     myBranchesBtn.addEventListener('click', () => {
