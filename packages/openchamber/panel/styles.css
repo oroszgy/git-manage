@@ -120,9 +120,9 @@ textarea {
 }
 
 .gm-branches {
-  /* Fits the title plus eight 22px header actions at the minimum width. */
+  /* The header wraps its actions below 220px; the title still needs room. */
   width: var(--gm-branches-w, 280px);
-  min-width: 220px;
+  min-width: 160px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -468,7 +468,8 @@ html.gm-splitter-dragging--y * {
   display: none;
 }
 
-/* Eight header actions plus a title have to fit 260px: 22px buttons. */
+/* Eight header actions plus a title: 22px buttons, wrapping when the column is
+ * dragged below their single-row width. */
 .gm-branches__header .gm-icon-btn {
   width: 22px;
   height: 22px;
@@ -477,6 +478,7 @@ html.gm-splitter-dragging--y * {
 .gm-branches__header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 4px 4px 4px 10px;
   border-bottom: 1px solid var(--oc-border);

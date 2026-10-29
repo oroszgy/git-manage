@@ -44,7 +44,7 @@ export const DEFAULT_LAYOUT: LayoutSizes = {
  * the panel is reopened in a different window.
  */
 export const LAYOUT_LIMITS: Record<LayoutSizeKey, { min: number; max: number }> = {
-  branches: { min: 220, max: 640 },
+  branches: { min: 160, max: 640 },
   side: { min: 220, max: 900 },
   filesPreview: { min: 40, max: 2000 },
   filesPane: { min: 80, max: 4000 },

@@ -143,8 +143,8 @@ async function render(): Promise<void> {
       axis: 'x',
       sign: 1,
       value: () => Math.round(branchPanel.getBoundingClientRect().width) || getLayout().branches,
-      min: () => 220,
-      max: () => Math.max(220, contentArea.clientWidth - sidePanelWidth() - 210),
+      min: () => 160,
+      max: () => Math.max(160, contentArea.clientWidth - sidePanelWidth() - 210),
       onResize: (px) => { setLayoutSize('branches', px); },
       onCommit: () => { commitLayout(); },
     });

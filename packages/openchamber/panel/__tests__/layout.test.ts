@@ -48,6 +48,10 @@ describe('clampLayoutSize', () => {
     expect(clampLayoutSize('side', 300.6)).toBe(301);
   });
 
+  it('lets the branch column shrink to 160px', () => {
+    expect(LAYOUT_LIMITS.branches.min).toBe(160);
+  });
+
   it('falls back to the default for non-finite values', () => {
     expect(clampLayoutSize('side', Number.NaN)).toBe(DEFAULT_LAYOUT.side);
     expect(clampLayoutSize('side', Number.POSITIVE_INFINITY)).toBe(DEFAULT_LAYOUT.side);
@@ -125,7 +129,7 @@ describe('applyLayout', () => {
     setLayoutSize('side', 600);
 
     const style = document.documentElement.style;
-    expect(style.getPropertyValue('--gm-branches-w')).toBe('220px');
+    expect(style.getPropertyValue('--gm-branches-w')).toBe('200px');
     expect(style.getPropertyValue('--gm-side-w')).toBe('240px');
     // The stored preference is unchanged, so a wide window gets it back.
     expect(getLayout()).toMatchObject({ branches: 500, side: 600 });
